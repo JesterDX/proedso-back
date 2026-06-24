@@ -30,7 +30,8 @@ app.use(cors({
 
     if (
       origin.startsWith('http://localhost:4200') ||
-      origin.startsWith('http://192.168.')
+      origin.startsWith('http://192.168.') ||
+      origin.endsWith('.vercel.app') // 👈 ¡ESTA LÍNEA ES LA MAGIA! Permite cualquier subdominio de Vercel
     ) {
       return callback(null, true);
     }
