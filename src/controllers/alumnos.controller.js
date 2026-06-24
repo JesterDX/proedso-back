@@ -99,9 +99,8 @@ async function crear(req, res) {
     let foto_url = null;
 
     if (req.file) {
-      foto_url = `/uploads/alumnos/${req.file.filename}`;
+      foto_url = `/uploads/alumnos/${req.file.filename}`; // 👈 ERROR: Ruta local fija
     }
-
     const nuevo = await alumnosService.crearAlumno({
       ...req.body,
       foto_url
@@ -145,7 +144,7 @@ async function actualizar(req, res) {
     let foto_url = req.body.foto_url || null;
 
     if (req.file) {
-      foto_url = `/uploads/alumnos/${req.file.filename}`;
+      foto_url = `/uploads/alumnos/${req.file.filename}`; // 👈 ERROR: Ruta local fija
     }
 
     const actualizado = await alumnosService.actualizarAlumno(id, {
