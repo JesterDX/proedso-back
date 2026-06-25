@@ -13,8 +13,7 @@ const pagosRoutes = require('./routes/pagos.routes');
 const practicasRoutes = require('./routes/practicas.routes');
 const auditoriaRoutes = require('./routes/auditoria.routes');
 const authRoutes = require('./routes/auth.routes'); 
-const authRoutes = require('./routes/dashboard.routes'); 
-
+const dashboardRoutes = require('./routes/dashboard.routes'); 
 const app = express();
 
 app.disable('etag');
