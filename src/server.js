@@ -13,6 +13,7 @@ const pagosRoutes = require('./routes/pagos.routes');
 const practicasRoutes = require('./routes/practicas.routes');
 const auditoriaRoutes = require('./routes/auditoria.routes');
 const authRoutes = require('./routes/auth.routes'); 
+const authRoutes = require('./routes/dashboard.routes'); 
 
 const app = express();
 
@@ -47,7 +48,7 @@ app.use((req, res, next) => {
   res.charset = 'utf-8';
   next();
 });
-
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/uploads', cors(), express.static(path.join(__dirname, '../uploads'), {
   setHeaders: (res) => {
     res.set('Access-Control-Allow-Origin', '*');
