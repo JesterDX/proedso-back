@@ -18,6 +18,32 @@ async function listar(req, res) {
   }
 }
 
+async function crear(req,res){
+
+    try{
+
+        const data = await planesCursoService.crearPlanCurso(req.body);
+
+        res.status(201).json({
+            ok:true,
+            message:"Plan creado correctamente",
+            data
+        });
+
+    }catch(error){
+
+        console.error(error);
+
+        res.status(500).json({
+            ok:false,
+            message:"Error al crear plan"
+        });
+
+    }
+
+}
+
 module.exports = {
-  listar
+  listar,
+  crear
 };
