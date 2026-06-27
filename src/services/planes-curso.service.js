@@ -64,7 +64,42 @@ async function listarPlanesCurso() {
 
   return result.rows;
 }
+async function crearPlanCurso(data) {
+  const query = `
+      INSERT INTO planes_curso
+      (
+        codigo,
+        nombre,
+        version,
+        tipo_curso_id,
+        permite_eleccion_personalizada,
+        vigente_desde,
+        vigente_hasta,
+        activo,
+        observaciones
+      )
+      VALUES
+      ($1,$2,$3,$4,$5,$6,$7,true,$8)
+      RETURNING *;
+  `;
+
+  const values = [
+    data.codigo,
+    data.nombre,
+    data.version,
+    data.tipo_curso_id,
+    data.permite_eleccion_personalizada,
+    data.vigente_desde,
+    data.vigente_hasta,
+    data.observaciones
+  ];
+
+  const result = await pool.query(query, values);
+
+  return result.rows[0];
+}
 
 module.exports = {
-  listarPlanesCurso
+  listarPlanesCurso,
+  crearPlanCurso
 };
