@@ -14,6 +14,8 @@ const practicasRoutes = require('./routes/practicas.routes');
 const auditoriaRoutes = require('./routes/auditoria.routes');
 const authRoutes = require('./routes/auth.routes'); 
 const dashboardRoutes = require('./routes/dashboard.routes'); 
+const tiposCursoRoutes = require('./routes/tipos-curso.routes');
+
 const app = express();
 
 app.disable('etag');
@@ -39,7 +41,7 @@ app.use(cors({
     return callback(new Error('No permitido por CORS'));
   }
 }));
-
+app.use('/api/tipos-curso', tiposCursoRoutes);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
