@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 
 async function listarTiposCurso() {
+
   const query = `
     SELECT
       id,
@@ -14,10 +15,13 @@ async function listarTiposCurso() {
   `;
 
   const result = await pool.query(query);
+
   return result.rows;
+
 }
 
 async function crearTipoCurso(data) {
+
   const {
     codigo,
     nombre,
@@ -49,9 +53,62 @@ async function crearTipoCurso(data) {
   ]);
 
   return result.rows[0];
+
+}
+
+async function actualizarTipoCurso(id, data) {
+
+  const {
+    codigo,
+    nombre,
+    duracion_meses,
+    cantidad_maquinas
+  } = data;
+
+  const query = `
+    UPDATE tipos_curso
+    SET
+      codigo = $1,
+      nombre = $2,
+      duracion_meses = $3,
+      cantidad_maquinas = $4
+    WHERE id = $5
+    RETURNING *
+  `;
+
+  const result = await pool.query(query, [
+    codigo,
+    nombre,
+    duracion_meses,
+    cantidad_maquinas,
+    id
+  ]);
+
+  return result.rows[0];
+
+}
+
+async function cambiarEstado(id, activo) {
+
+  const query = `
+    UPDATE tipos_curso
+    SET activo = $1
+    WHERE id = $2
+    RETURNING *
+  `;
+
+  const result = await pool.query(query, [
+    activo,
+    id
+  ]);
+
+  return result.rows[0];
+
 }
 
 module.exports = {
   listarTiposCurso,
-  crearTipoCurso
+  crearTipoCurso,
+  actualizarTipoCurso,
+  cambiarEstado
 };
