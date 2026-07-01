@@ -37,6 +37,59 @@ async function listarPlanesCursoActivos(req, res) {
   }
 }
 
+async function actualizar(req,res){
+
+    try{
+
+        const data = await planesCursoService.actualizarPlanCurso(
+            req.params.id,
+            req.body
+        );
+
+        res.json({
+            ok:true,
+            data
+        });
+
+    }catch(err){
+
+        console.error(err);
+
+        res.status(500).json({
+            ok:false,
+            message:"Error al actualizar."
+        });
+
+    }
+
+}
+
+async function cambiarEstado(req,res){
+
+    try{
+
+        const data = await planesCursoService.cambiarEstadoPlanCurso(
+            req.params.id
+        );
+
+        res.json({
+            ok:true,
+            data
+        });
+
+    }catch(err){
+
+        console.error(err);
+
+        res.status(500).json({
+            ok:false,
+            message:"Error."
+        });
+
+    }
+
+}
+
 async function crear(req,res){
 
     try{
@@ -65,5 +118,7 @@ async function crear(req,res){
 module.exports = {
   listar,
   listarPlanesCursoActivos,
-  crear
+  crear,
+  actualizar,
+  cambiarEstado
 };
