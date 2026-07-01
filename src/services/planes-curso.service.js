@@ -128,6 +128,56 @@ async function listarPlanesCursoActivos() {
   return result.rows;
 }
 
+async function actualizarPlanCurso(id, data) {
+
+  const query = `
+    UPDATE planes_curso
+    SET
+      codigo=$1,
+      nombre=$2,
+      version=$3,
+      tipo_curso_id=$4,
+      permite_eleccion_personalizada=$5,
+      vigente_desde=$6,
+      vigente_hasta=$7,
+      observaciones=$8
+    WHERE id=$9
+    RETURNING *;
+  `;
+
+  const values = [
+    data.codigo,
+    data.nombre,
+    data.version,
+    data.tipo_curso_id,
+    data.permite_eleccion_personalizada,
+    data.vigente_desde,
+    data.vigente_hasta,
+    data.observaciones,
+    id
+  ];
+
+  const result = await pool.query(query, values);
+
+  return result.rows[0];
+
+}
+
+async function cambiarEstadoPlanCurso(id) {
+
+  const query = `
+    UPDATE planes_curso
+    SET activo = NOT activo
+    WHERE id=$1
+    RETURNING *;
+  `;
+
+  const result = await pool.query(query,[id]);
+
+  return result.rows[0];
+
+}
+
 
 async function crearPlanCurso(data) {
   const query = `
@@ -167,5 +217,7 @@ async function crearPlanCurso(data) {
 module.exports = {
   listarPlanesCurso,
   listarPlanesCursoActivos,
-  crearPlanCurso
+  crearPlanCurso,
+  actualizarPlanCurso,
+  cambiarEstadoPlanCurso
 };
