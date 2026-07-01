@@ -19,9 +19,9 @@ async function listar(req, res) {
 }
 
 
-async function listarCompletos(req, res) {
+async function listarPlanesCursoActivos(req, res) {
   try {
-    const data = await planesCursoService.listarPlanesCursoCompletos();
+    const data = await planesCursoService.listarPlanesCursoActivos();
 
     res.json({
       ok: true,
@@ -64,6 +64,6 @@ async function crear(req,res){
 
 module.exports = {
   listar,
-  listarCompletos,
+  listarPlanesCursoActivos,
   crear
 };
