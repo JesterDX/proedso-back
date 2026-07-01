@@ -20,6 +20,25 @@ async function listarTiposCurso() {
 
 }
 
+
+async function listarTiposCursoActivos(){
+
+    const query = `
+        SELECT
+            id,
+            codigo,
+            nombre
+        FROM tipos_curso
+        WHERE activo=true
+        ORDER BY nombre;
+    `;
+
+    const result = await pool.query(query);
+
+    return result.rows;
+
+}
+
 async function crearTipoCurso(data) {
 
   const {
@@ -110,5 +129,6 @@ module.exports = {
   listarTiposCurso,
   crearTipoCurso,
   actualizarTipoCurso,
-  cambiarEstado
+  cambiarEstado,
+  listarTiposCursoActivos
 };
