@@ -20,6 +20,29 @@ async function listarTiposCurso() {
 
 }
 
+async function listarActivos(req,res){
+
+    try{
+
+        const data = await tiposCursoService.listarTiposCursoActivos();
+
+        res.json({
+            ok:true,
+            data
+        });
+
+    }catch(err){
+
+        console.error(err);
+
+        res.status(500).json({
+            ok:false
+        });
+
+    }
+
+}
+
 
 async function listarTiposCursoActivos(){
 
@@ -127,6 +150,7 @@ async function cambiarEstado(id, activo) {
 
 module.exports = {
   listarTiposCurso,
+  listarActivos,
   crearTipoCurso,
   actualizarTipoCurso,
   cambiarEstado,
