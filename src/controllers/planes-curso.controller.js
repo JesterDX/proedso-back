@@ -18,6 +18,25 @@ async function listar(req, res) {
   }
 }
 
+
+async function listarCompletos(req, res) {
+  try {
+    const data = await planesCursoService.listarPlanesCursoCompletos();
+
+    res.json({
+      ok: true,
+      data
+    });
+  } catch (error) {
+    console.error('Error al listar planes de curso:', error);
+
+    res.status(500).json({
+      ok: false,
+      message: 'Error al listar planes de curso.'
+    });
+  }
+}
+
 async function crear(req,res){
 
     try{
@@ -45,5 +64,6 @@ async function crear(req,res){
 
 module.exports = {
   listar,
+  listarCompletos,
   crear
 };
