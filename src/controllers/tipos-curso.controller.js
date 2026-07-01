@@ -24,6 +24,30 @@ async function listar(req, res) {
 
 }
 
+async function listarActivos(req, res) {
+
+  try {
+
+    const data = await tiposCursoService.listarTiposCursoActivos();
+
+    res.json({
+      ok: true,
+      data
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      ok: false,
+      message: 'Error al listar tipos activos.'
+    });
+
+  }
+
+}
+
 async function crear(req, res) {
 
   try {
@@ -109,5 +133,6 @@ module.exports = {
   listar,
   crear,
   actualizar,
+  listarActivos,
   cambiarEstado
 };
