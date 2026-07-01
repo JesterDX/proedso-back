@@ -166,5 +166,6 @@ async function crearPlanCurso(data) {
 
 module.exports = {
   listarPlanesCurso,
+  listarPlanesCursoActivos,
   crearPlanCurso
 };
