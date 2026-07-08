@@ -264,16 +264,19 @@ const buscarMatriculas = async (req, res) => {
         return res.status(500).json({ error: 'Error al buscar matrículas' });
     }
 };
-
 async function editar(req, res) {
 
   try {
 
+    const comprobante_url = req.file
+      ? req.file.path
+      : req.body.comprobante_url;
+
     const data = await pagosService.editarPago({
       pago_id: req.params.id,
-      ...req.body
+      ...req.body,
+      comprobante_url
     });
-
 
     res.json({
       ok: true,
@@ -281,22 +284,18 @@ async function editar(req, res) {
       data
     });
 
-
-  } catch(error) {
+  } catch (error) {
 
     console.error('Error al editar pago:', error);
 
     res.status(500).json({
-      ok:false,
-      message:error.message || 'Error al editar pago.'
+      ok: false,
+      message: error.message || 'Error al editar pago.'
     });
 
   }
 
 }
-
-
-
 async function eliminar(req, res) {
 
   try {
