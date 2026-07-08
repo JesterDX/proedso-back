@@ -214,10 +214,41 @@ async function crearPlanCurso(data) {
   return result.rows[0];
 }
 
+
+async function obtenerPlanCursoPorId(id) {
+
+  const query = `
+    SELECT
+      pc.id,
+      pc.codigo,
+      pc.nombre,
+      pc.version,
+      pc.tipo_curso_id,
+      tc.nombre AS tipo_curso_nombre,
+      pc.vigente_desde,
+      pc.vigente_hasta,
+      pc.permite_eleccion_personalizada,
+      pc.activo,
+      pc.observaciones
+    FROM planes_curso pc
+    INNER JOIN tipos_curso tc
+      ON tc.id = pc.tipo_curso_id
+    WHERE pc.id = $1;
+  `;
+
+
+  const result = await pool.query(query,[id]);
+
+
+  return result.rows[0];
+
+}
+
 module.exports = {
   listarPlanesCurso,
   listarPlanesCursoActivos,
   crearPlanCurso,
   actualizarPlanCurso,
-  cambiarEstadoPlanCurso
+  cambiarEstadoPlanCurso,
+  obtenerPlanCursoPorId
 };
