@@ -18,8 +18,7 @@ async function listarTodasMaquinas() {
     SELECT
       id,
       nombre,
-      activo,
-      orden_visual
+      activo
     FROM maquinas
     ORDER BY orden_visual ASC NULLS LAST, nombre ASC
   `);
