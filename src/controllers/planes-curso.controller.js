@@ -115,10 +115,40 @@ async function crear(req,res){
 
 }
 
+async function obtenerPorId(req,res){
+
+  try{
+
+    const data = await planesCursoService.obtenerPlanCursoPorId(
+      req.params.id
+    );
+
+
+    res.json({
+      ok:true,
+      data
+    });
+
+
+  }catch(error){
+
+    console.error(error);
+
+
+    res.status(500).json({
+      ok:false,
+      message:"Error al obtener plan"
+    });
+
+  }
+
+}
+
 module.exports = {
   listar,
   listarPlanesCursoActivos,
   crear,
   actualizar,
-  cambiarEstado
+  cambiarEstado,
+  obtenerPorId
 };
