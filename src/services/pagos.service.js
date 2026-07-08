@@ -829,6 +829,77 @@ async function actualizarFechas(cuotas) {
     client.release();
   }
 }
+
+async function eliminarPago(id) {
+
+  const client = await pool.connect();
+
+  try {
+
+    await client.query('BEGIN');
+
+
+    const pagoRes = await client.query(`
+      SELECT *
+      FROM pagos
+      WHERE id = $1
+      FOR UPDATE
+    `,[id]);
+
+
+    const pago = pagoRes.rows[0];
+
+
+    if(!pago){
+      throw new Error('Pago no encontrado');
+    }
+
+
+    if(pago.cuota_id){
+
+      await client.query(`
+        UPDATE cuotas
+        SET
+          monto_pagado = monto_pagado - $1,
+          saldo_pendiente = saldo_pendiente + $1,
+          estado = 'PENDIENTE'
+        WHERE id = $2
+      `,
+      [
+        pago.monto,
+        pago.cuota_id
+      ]);
+
+    }
+
+
+    await client.query(`
+      DELETE FROM pagos
+      WHERE id=$1
+    `,
+    [id]);
+
+
+    await client.query('COMMIT');
+
+
+    return {
+      mensaje:'Pago eliminado correctamente'
+    };
+
+
+  } catch(error){
+
+    await client.query('ROLLBACK');
+    throw error;
+
+  } finally {
+
+    client.release();
+
+  }
+
+}
 module.exports = {
   listarPagos,
   listarResumenPagos,
@@ -839,7 +910,8 @@ module.exports = {
   crearPlanPagoManual,
   actualizarFechas,
   buscarMatriculasParaPago,
-  editarPago
+  editarPago,
+  eliminarPago
 };
 
 
