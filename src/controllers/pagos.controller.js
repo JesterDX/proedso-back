@@ -265,7 +265,6 @@ const buscarMatriculas = async (req, res) => {
     }
 };
 async function editar(req, res) {
-
   try {
 
     const comprobante_url = req.file
@@ -285,16 +284,13 @@ async function editar(req, res) {
     });
 
   } catch (error) {
-
-    console.error('Error al editar pago:', error);
+    console.error(error);
 
     res.status(500).json({
       ok: false,
-      message: error.message || 'Error al editar pago.'
+      message: error.message
     });
-
   }
-
 }
 async function eliminar(req, res) {
 
