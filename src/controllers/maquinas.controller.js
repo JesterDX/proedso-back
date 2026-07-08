@@ -18,6 +18,28 @@ async function listar(req, res) {
   }
 }
 
+async function listarTodas(req, res) {
+  try {
+
+    const data = await maquinasService.listarTodasMaquinas();
+
+    res.json({
+      ok: true,
+      data
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      ok: false,
+      message: 'Error al listar máquinas.'
+    });
+
+  }
+}
+
 async function crear(req, res) {
   try {
     const data = await maquinasService.crearMaquina(req.body);
@@ -80,5 +102,6 @@ module.exports = {
   listar,
   cambiarEstado,
   actualizar,
-  crear
+  crear,
+  listarTodas
 };
