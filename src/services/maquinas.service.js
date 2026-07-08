@@ -1,23 +1,16 @@
 const pool = require('../config/db');
 
 async function listarMaquinas() {
-  try {
-    const result = await pool.query(`
-      SELECT 
-        id, 
-        nombre, 
-        activo, 
-        orden_visual
-      FROM maquinas
-      WHERE activo = TRUE
-      ORDER BY orden_visual ASC NULLS LAST, nombre ASC
-    `);
+  const result = await pool.query(`
+    SELECT
+      id,
+      nombre,
+      activo
+    FROM maquinas
+    ORDER BY orden_visual ASC NULLS LAST;
+  `);
 
-    return result.rows;
-  } catch (error) {
-    console.error('Error al listar máquinas:', error);
-    throw new Error('Error al obtener la lista de máquinas');
-  }
+  return result.rows;
 }
 
 async function crearMaquina(data) {
@@ -28,13 +21,20 @@ async function crearMaquina(data) {
       orden_visual,
       activo
     )
-    VALUES ($1,$2,true)
+    VALUES
+    (
+      $1,
+      (
+        SELECT COALESCE(MAX(orden_visual),0) + 1
+        FROM maquinas
+      ),
+      true
+    )
     RETURNING *;
   `;
 
   const result = await pool.query(query, [
-    data.nombre,
-    data.orden_visual
+    data.nombre
   ]);
 
   return result.rows[0];
@@ -44,15 +44,13 @@ async function actualizarMaquina(id, data) {
   const query = `
     UPDATE maquinas
     SET
-      nombre = $1,
-      orden_visual = $2
-    WHERE id = $3
+      nombre = $1
+    WHERE id = $2
     RETURNING *;
   `;
 
   const result = await pool.query(query, [
     data.nombre,
-    data.orden_visual,
     id
   ]);
 
