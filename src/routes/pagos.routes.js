@@ -17,5 +17,7 @@ router.post('/recalcular-plan', pagosController.recalcularPlan);
 router.post('/manual', pagosController.crearPlanPagoManual);
 router.put('/cuotas/:cuota_id', pagosController.editarCuota);
 router.put('/actualizar-fechas', pagosController.actualizarFechas);
+router.put('/:id', pagosController.editar);
 
+router.delete('/:id', pagosController.eliminar);
 module.exports = router;
