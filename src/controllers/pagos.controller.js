@@ -265,6 +265,66 @@ const buscarMatriculas = async (req, res) => {
     }
 };
 
+async function editar(req, res) {
+
+  try {
+
+    const data = await pagosService.editarPago({
+      pago_id: req.params.id,
+      ...req.body
+    });
+
+
+    res.json({
+      ok: true,
+      message: 'Pago actualizado correctamente.',
+      data
+    });
+
+
+  } catch(error) {
+
+    console.error('Error al editar pago:', error);
+
+    res.status(500).json({
+      ok:false,
+      message:error.message || 'Error al editar pago.'
+    });
+
+  }
+
+}
+
+
+
+async function eliminar(req, res) {
+
+  try {
+
+    const data = await pagosService.eliminarPago(
+      req.params.id
+    );
+
+
+    res.json({
+      ok:true,
+      message:data.mensaje
+    });
+
+
+  } catch(error) {
+
+    console.error('Error al eliminar pago:', error);
+
+    res.status(500).json({
+      ok:false,
+      message:error.message || 'Error al eliminar pago.'
+    });
+
+  }
+
+}
+
 module.exports = {
     listar,
     resumen,
@@ -276,5 +336,7 @@ module.exports = {
     generarPlan,
     crearPlanPagoManual,
     actualizarFechas,
-    buscarMatriculas
+    buscarMatriculas,
+    editar,
+    eliminar
 };
