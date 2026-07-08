@@ -13,6 +13,20 @@ async function listarMaquinas() {
   return result.rows;
 }
 
+async function listarTodasMaquinas() {
+  const result = await pool.query(`
+    SELECT
+      id,
+      nombre,
+      activo,
+      orden_visual
+    FROM maquinas
+    ORDER BY orden_visual ASC NULLS LAST, nombre ASC
+  `);
+
+  return result.rows;
+}
+
 async function crearMaquina(data) {
   const query = `
     INSERT INTO maquinas
@@ -74,5 +88,6 @@ module.exports = {
   listarMaquinas,
   crearMaquina,
   actualizarMaquina,
-  cambiarEstadoMaquina
+  cambiarEstadoMaquina,
+  listarTodasMaquinas
 };
