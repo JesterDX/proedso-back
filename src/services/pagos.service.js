@@ -767,6 +767,40 @@ async function crearPlanPagoManual({
   }
 
 }
+
+async function editarPago({
+  pago_id,
+  metodo_pago,
+  numero_operacion,
+  comprobante_url,
+  observaciones
+}) {
+
+  const query = `
+    UPDATE pagos
+    SET
+      metodo_pago = $1,
+      numero_operacion = $2,
+      comprobante_url = $3,
+      observaciones = $4
+    WHERE id = $5
+    RETURNING *
+  `;
+
+  const result = await pool.query(query, [
+    metodo_pago,
+    numero_operacion,
+    comprobante_url,
+    observaciones,
+    pago_id
+  ]);
+
+  if (!result.rows.length) {
+    throw new Error('Pago no encontrado');
+  }
+
+  return result.rows[0];
+}
 async function actualizarFechas(cuotas) {
   const client = await pool.connect();
   try {
@@ -804,7 +838,8 @@ module.exports = {
   editarCuota,
   crearPlanPagoManual,
   actualizarFechas,
-  buscarMatriculasParaPago
+  buscarMatriculasParaPago,
+  editarPago
 };
 
 
