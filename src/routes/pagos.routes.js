@@ -64,9 +64,9 @@ router.get(
 
 router.put(
   '/:id',
+  uploadPago.single('comprobante'),
   pagosController.editar
 );
-
 router.delete(
   '/:id',
   pagosController.eliminar
