@@ -17,6 +17,31 @@ async function listar(req, res) {
     });
   }
 }
+async function maquinas(req,res){
+
+    try{
+
+        const data = await planesCursoService.obtenerMaquinasPlan(
+            req.params.id
+        );
+
+        res.json({
+            ok:true,
+            data
+        });
+
+    }catch(error){
+
+        console.error(error);
+
+        res.status(500).json({
+            ok:false,
+            message:'Error obteniendo máquinas del plan.'
+        });
+
+    }
+
+}
 
 
 async function listarPlanesCursoActivos(req, res) {
@@ -150,5 +175,6 @@ module.exports = {
   crear,
   actualizar,
   cambiarEstado,
-  obtenerPorId
+  obtenerPorId,
+  maquinas
 };
