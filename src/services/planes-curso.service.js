@@ -163,6 +163,39 @@ async function actualizarPlanCurso(id, data) {
 
 }
 
+async function obtenerMaquinasPlan(idPlan) {
+
+  const query = `
+    SELECT
+
+      m.id,
+      m.nombre,
+
+      CASE
+        WHEN pm.id IS NULL THEN false
+        ELSE true
+      END AS seleccionada,
+
+      COALESCE(pm.obligatoria,false) AS obligatoria,
+      COALESCE(pm.es_regalo,false) AS es_regalo,
+      pm.orden
+
+    FROM maquinas m
+
+    LEFT JOIN plan_maquinas pm
+      ON pm.maquina_id = m.id
+     AND pm.plan_curso_id = $1
+
+    WHERE m.activo = true
+
+    ORDER BY m.orden_visual;
+  `;
+
+  const result = await pool.query(query,[idPlan]);
+
+  return result.rows;
+}
+
 async function cambiarEstadoPlanCurso(id) {
 
   const query = `
@@ -250,5 +283,6 @@ module.exports = {
   crearPlanCurso,
   actualizarPlanCurso,
   cambiarEstadoPlanCurso,
-  obtenerPlanCursoPorId
+  obtenerPlanCursoPorId,
+  obtenerMaquinasPlan
 };
