@@ -5,7 +5,7 @@ const router = express.Router();
 router.get('/', controller.listar);
 router.get('/activos', controller.listarPlanesCursoActivos);
 router.get('/:id', controller.obtenerPorId);
-
+router.get('/:id/maquinas', controller.maquinas);
 router.post('/', controller.crear);
 router.put('/:id', controller.actualizar);
 router.patch('/:id/estado', controller.cambiarEstado);
