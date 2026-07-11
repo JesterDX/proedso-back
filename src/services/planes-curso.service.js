@@ -291,6 +291,147 @@ async function obtenerPlanCursoPorId(id) {
 
 }
 
+
+async function guardarConfiguracionPlan(idPlan, maquinas) {
+
+  const client = await pool.connect();
+
+  try {
+
+    await client.query('BEGIN');
+
+
+    // ======================================
+    // 1. ELIMINAR MÁQUINAS DESMARCADAS
+    // ======================================
+
+    await client.query(
+      `
+      DELETE FROM plan_maquinas
+      WHERE plan_curso_id=$1
+      AND maquina_id NOT IN (
+        SELECT json_array_elements($2::json)->>'id'
+      )::int
+      `,
+      [
+        idPlan,
+        JSON.stringify(
+          maquinas.filter(m=>m.seleccionada)
+        )
+      ]
+    );
+
+
+
+    // ======================================
+    // 2. INSERTAR / ACTUALIZAR MÁQUINAS
+    // ======================================
+
+
+    for(const m of maquinas){
+
+
+      if(!m.seleccionada)
+        continue;
+
+
+
+      await client.query(
+        `
+        INSERT INTO plan_maquinas
+        (
+          plan_curso_id,
+          maquina_id,
+          obligatoria,
+          es_regalo,
+          orden
+        )
+        VALUES
+        ($1,$2,$3,$4,$5)
+
+        ON CONFLICT(plan_curso_id,maquina_id)
+
+        DO UPDATE SET
+
+          obligatoria=$3,
+          es_regalo=$4,
+          orden=$5
+
+        `,
+        [
+          idPlan,
+          m.id,
+          m.obligatoria,
+          m.es_regalo,
+          m.orden
+        ]
+      );
+
+
+
+      // ======================================
+      // HORAS Y SESIONES
+      // ======================================
+
+
+      await client.query(
+        `
+        INSERT INTO plan_horas_practica
+        (
+          plan_curso_id,
+          maquina_id,
+          horas,
+          sesiones_totales
+        )
+
+        VALUES
+        ($1,$2,$3,$4)
+
+
+        ON CONFLICT(plan_curso_id,maquina_id)
+
+        DO UPDATE SET
+
+        horas=$3,
+        sesiones_totales=$4
+
+        `,
+        [
+          idPlan,
+          m.id,
+          m.horas,
+          m.sesiones_totales
+        ]
+      );
+
+
+    }
+
+
+
+    await client.query('COMMIT');
+
+
+    return {
+      ok:true
+    };
+
+
+  }catch(error){
+
+    await client.query('ROLLBACK');
+
+    throw error;
+
+
+  }finally{
+
+    client.release();
+
+  }
+
+}
+
 module.exports = {
   listarPlanesCurso,
   listarPlanesCursoActivos,
@@ -298,5 +439,6 @@ module.exports = {
   actualizarPlanCurso,
   cambiarEstadoPlanCurso,
   obtenerPlanCursoPorId,
-  obtenerMaquinasPlan
+  obtenerMaquinasPlan,
+  guardarConfiguracionPlan
 };
