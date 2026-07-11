@@ -9,5 +9,8 @@ router.get('/:id/maquinas', controller.maquinas);
 router.post('/', controller.crear);
 router.put('/:id', controller.actualizar);
 router.patch('/:id/estado', controller.cambiarEstado);
-
+router.put(
+ '/planes-curso/:id/configuracion',
+ controller.guardarConfiguracion
+);
 module.exports = router;
