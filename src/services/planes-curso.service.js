@@ -176,9 +176,15 @@ async function obtenerMaquinasPlan(idPlan) {
         ELSE true
       END AS seleccionada,
 
-      COALESCE(pm.obligatoria,false) AS obligatoria,
-      COALESCE(pm.es_regalo,false) AS es_regalo,
-      pm.orden
+      COALESCE(pm.obligatoria, false) AS obligatoria,
+
+      COALESCE(pm.es_regalo, false) AS es_regalo,
+
+      pm.orden,
+
+      COALESCE(php.horas, 0) AS horas,
+
+      COALESCE(php.sesiones_totales, 0) AS sesiones_totales
 
     FROM maquinas m
 
@@ -186,14 +192,22 @@ async function obtenerMaquinasPlan(idPlan) {
       ON pm.maquina_id = m.id
      AND pm.plan_curso_id = $1
 
+    LEFT JOIN plan_horas_practica php
+      ON php.maquina_id = m.id
+     AND php.plan_curso_id = $1
+
     WHERE m.activo = true
 
-    ORDER BY m.orden_visual;
+    ORDER BY
+      pm.orden NULLS LAST,
+      m.orden_visual;
+
   `;
 
-  const result = await pool.query(query,[idPlan]);
+  const result = await pool.query(query, [idPlan]);
 
   return result.rows;
+
 }
 
 async function cambiarEstadoPlanCurso(id) {
