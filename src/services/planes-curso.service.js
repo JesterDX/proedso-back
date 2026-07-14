@@ -291,8 +291,11 @@ async function obtenerPlanCursoPorId(id) {
 
 }
 
-
-async function guardarConfiguracionPlan(idPlan, maquinas) {
+async function guardarConfiguracionPlan(
+  idPlan,
+  plan,
+  maquinas
+) {
 
   const client = await pool.connect();
 
@@ -300,63 +303,112 @@ async function guardarConfiguracionPlan(idPlan, maquinas) {
 
     await client.query('BEGIN');
 
-
-    // ======================================
-    // 1. ELIMINAR MÁQUINAS DESMARCADAS
-    // ======================================
+    // =====================================================
+    // ACTUALIZAR DATOS GENERALES DEL PLAN
+    // =====================================================
 
     await client.query(
       `
-      DELETE FROM plan_maquinas
-      WHERE plan_curso_id=$1
-      AND maquina_id NOT IN (
-        SELECT json_array_elements($2::json)->>'id'
-      )::int
+      UPDATE planes_curso
+      SET
+
+        codigo=$1,
+        nombre=$2,
+        version=$3,
+        tipo_curso_id=$4,
+        permite_eleccion_personalizada=$5,
+        vigente_desde=$6,
+        vigente_hasta=$7,
+        observaciones=$8
+
+      WHERE id=$9
       `,
       [
-        idPlan,
-        JSON.stringify(
-          maquinas.filter(m=>m.seleccionada)
-        )
+        plan.codigo,
+        plan.nombre,
+        plan.version,
+        plan.tipo_curso_id,
+        plan.permite_eleccion_personalizada,
+        plan.vigente_desde,
+        plan.vigente_hasta,
+        plan.observaciones,
+        idPlan
       ]
     );
 
+    // =====================================================
+    // ELIMINAR MAQUINAS DESMARCADAS
+    // =====================================================
 
+    const maquinasSeleccionadas = maquinas.filter(
+      m => m.seleccionada
+    );
 
-    // ======================================
-    // 2. INSERTAR / ACTUALIZAR MÁQUINAS
-    // ======================================
+    if (maquinasSeleccionadas.length > 0) {
 
+      await client.query(
+        `
+        DELETE FROM plan_maquinas
+        WHERE plan_curso_id=$1
+        AND maquina_id NOT IN (
 
-    for(const m of maquinas){
+          SELECT
+          (json_array_elements($2::json)->>'id')::int
 
+        )
+        `,
+        [
+          idPlan,
+          JSON.stringify(maquinasSeleccionadas)
+        ]
+      );
 
-      if(!m.seleccionada)
+    } else {
+
+      await client.query(
+        `
+        DELETE
+        FROM plan_maquinas
+        WHERE plan_curso_id=$1
+        `,
+        [idPlan]
+      );
+
+    }
+
+    // =====================================================
+    // INSERTAR / ACTUALIZAR MAQUINAS
+    // =====================================================
+
+    for (const m of maquinas) {
+
+      if (!m.seleccionada)
         continue;
-
-
 
       await client.query(
         `
         INSERT INTO plan_maquinas
         (
+
           plan_curso_id,
           maquina_id,
           obligatoria,
           es_regalo,
           orden
+
         )
+
         VALUES
         ($1,$2,$3,$4,$5)
 
-        ON CONFLICT(plan_curso_id,maquina_id)
+        ON CONFLICT
+        (plan_curso_id, maquina_id)
 
         DO UPDATE SET
 
-          obligatoria=$3,
-          es_regalo=$4,
-          orden=$5
-
+          obligatoria = EXCLUDED.obligatoria,
+          es_regalo = EXCLUDED.es_regalo,
+          orden = EXCLUDED.orden
         `,
         [
           idPlan,
@@ -367,34 +419,28 @@ async function guardarConfiguracionPlan(idPlan, maquinas) {
         ]
       );
 
-
-
-      // ======================================
-      // HORAS Y SESIONES
-      // ======================================
-
-
       await client.query(
         `
         INSERT INTO plan_horas_practica
         (
+
           plan_curso_id,
           maquina_id,
           horas,
           sesiones_totales
+
         )
 
         VALUES
         ($1,$2,$3,$4)
 
-
-        ON CONFLICT(plan_curso_id,maquina_id)
+        ON CONFLICT
+        (plan_curso_id, maquina_id)
 
         DO UPDATE SET
 
-        horas=$3,
-        sesiones_totales=$4
-
+          horas = EXCLUDED.horas,
+          sesiones_totales = EXCLUDED.sesiones_totales
         `,
         [
           idPlan,
@@ -404,27 +450,23 @@ async function guardarConfiguracionPlan(idPlan, maquinas) {
         ]
       );
 
-
     }
-
-
 
     await client.query('COMMIT');
 
-
     return {
-      ok:true
+
+      ok: true
+
     };
 
-
-  }catch(error){
+  } catch (error) {
 
     await client.query('ROLLBACK');
 
     throw error;
 
-
-  }finally{
+  } finally {
 
     client.release();
 
