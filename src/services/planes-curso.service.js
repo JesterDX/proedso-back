@@ -291,58 +291,119 @@ async function obtenerPlanCursoPorId(id) {
 
 }
 
-async function guardarConfiguracion(req,res){
+async function guardarConfiguracionPlan(idPlan, maquinas) {
+
+  const client = await pool.connect();
+
+  try {
+
+    await client.query('BEGIN');
 
 
-    try{
+    // ===================================
+    // ELIMINAR CONFIGURACIÓN ANTERIOR
+    // ===================================
+
+    await client.query(
+      `
+      DELETE FROM plan_maquinas
+      WHERE plan_curso_id=$1
+      `,
+      [idPlan]
+    );
 
 
-        console.log(
-            "ID PLAN:",
-            req.params.id
-        );
+    await client.query(
+      `
+      DELETE FROM plan_horas_practica
+      WHERE plan_curso_id=$1
+      `,
+      [idPlan]
+    );
 
 
-        console.log(
-            "BODY RECIBIDO:",
-            JSON.stringify(req.body,null,2)
-        );
+
+    // ===================================
+    // INSERTAR NUEVA CONFIGURACIÓN
+    // ===================================
+
+    for (const m of maquinas) {
 
 
-        const data =
-        await planesCursoService.guardarConfiguracionPlan(
-            req.params.id,
-            req.body.maquinas
-        );
+      if (!m.seleccionada) {
+        continue;
+      }
 
 
-        res.json({
+      await client.query(
+        `
+        INSERT INTO plan_maquinas
+        (
+          plan_curso_id,
+          maquina_id,
+          obligatoria,
+          es_regalo,
+          orden
+        )
+        VALUES
+        ($1,$2,$3,$4,$5)
+        `,
+        [
+          idPlan,
+          m.id,
+          m.obligatoria,
+          m.es_regalo,
+          m.orden
+        ]
+      );
 
-            ok:true,
-            message:"Configuración guardada correctamente",
-            data
-
-        });
 
 
-    }catch(error){
-
-
-        console.error(
-            "ERROR CONFIGURACION PLAN:",
-            error
-        );
-
-
-        res.status(500).json({
-
-            ok:false,
-            message:error.message
-
-        });
+      await client.query(
+        `
+        INSERT INTO plan_horas_practica
+        (
+          plan_curso_id,
+          maquina_id,
+          horas,
+          sesiones_totales
+        )
+        VALUES
+        ($1,$2,$3,$4)
+        `,
+        [
+          idPlan,
+          m.id,
+          m.horas,
+          m.sesiones_totales
+        ]
+      );
 
 
     }
+
+
+    await client.query('COMMIT');
+
+
+    return {
+      plan_id:idPlan,
+      maquinas_configuradas:
+      maquinas.filter(m=>m.seleccionada).length
+    };
+
+
+  } catch(error){
+
+    await client.query('ROLLBACK');
+
+    throw error;
+
+  } finally {
+
+    client.release();
+
+  }
 
 }
 module.exports = {
