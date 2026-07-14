@@ -291,189 +291,60 @@ async function obtenerPlanCursoPorId(id) {
 
 }
 
-async function guardarConfiguracionPlan(
-  idPlan,
-  plan,
-  maquinas
-) {
+async function guardarConfiguracion(req,res){
 
-  const client = await pool.connect();
 
-  try {
+    try{
 
-    await client.query('BEGIN');
 
-    // =====================================================
-    // ACTUALIZAR DATOS GENERALES DEL PLAN
-    // =====================================================
+        console.log(
+            "ID PLAN:",
+            req.params.id
+        );
 
-    await client.query(
-      `
-      UPDATE planes_curso
-      SET
 
-        codigo=$1,
-        nombre=$2,
-        version=$3,
-        tipo_curso_id=$4,
-        permite_eleccion_personalizada=$5,
-        vigente_desde=$6,
-        vigente_hasta=$7,
-        observaciones=$8
+        console.log(
+            "BODY RECIBIDO:",
+            JSON.stringify(req.body,null,2)
+        );
 
-      WHERE id=$9
-      `,
-      [
-        plan.codigo,
-        plan.nombre,
-        plan.version,
-        plan.tipo_curso_id,
-        plan.permite_eleccion_personalizada,
-        plan.vigente_desde,
-        plan.vigente_hasta,
-        plan.observaciones,
-        idPlan
-      ]
-    );
 
-    // =====================================================
-    // ELIMINAR MAQUINAS DESMARCADAS
-    // =====================================================
+        const data =
+        await planesCursoService.guardarConfiguracionPlan(
+            req.params.id,
+            req.body.maquinas
+        );
 
-    const maquinasSeleccionadas = maquinas.filter(
-      m => m.seleccionada
-    );
 
-    if (maquinasSeleccionadas.length > 0) {
+        res.json({
 
-      await client.query(
-        `
-        DELETE FROM plan_maquinas
-        WHERE plan_curso_id=$1
-        AND maquina_id NOT IN (
+            ok:true,
+            message:"Configuración guardada correctamente",
+            data
 
-          SELECT
-          (json_array_elements($2::json)->>'id')::int
+        });
 
-        )
-        `,
-        [
-          idPlan,
-          JSON.stringify(maquinasSeleccionadas)
-        ]
-      );
 
-    } else {
+    }catch(error){
 
-      await client.query(
-        `
-        DELETE
-        FROM plan_maquinas
-        WHERE plan_curso_id=$1
-        `,
-        [idPlan]
-      );
+
+        console.error(
+            "ERROR CONFIGURACION PLAN:",
+            error
+        );
+
+
+        res.status(500).json({
+
+            ok:false,
+            message:error.message
+
+        });
+
 
     }
-
-    // =====================================================
-    // INSERTAR / ACTUALIZAR MAQUINAS
-    // =====================================================
-
-    for (const m of maquinas) {
-
-      if (!m.seleccionada)
-        continue;
-
-      await client.query(
-        `
-        INSERT INTO plan_maquinas
-        (
-
-          plan_curso_id,
-          maquina_id,
-          obligatoria,
-          es_regalo,
-          orden
-
-        )
-
-        VALUES
-        ($1,$2,$3,$4,$5)
-
-        ON CONFLICT
-        (plan_curso_id, maquina_id)
-
-        DO UPDATE SET
-
-          obligatoria = EXCLUDED.obligatoria,
-          es_regalo = EXCLUDED.es_regalo,
-          orden = EXCLUDED.orden
-        `,
-        [
-          idPlan,
-          m.id,
-          m.obligatoria,
-          m.es_regalo,
-          m.orden
-        ]
-      );
-
-      await client.query(
-        `
-        INSERT INTO plan_horas_practica
-        (
-
-          plan_curso_id,
-          maquina_id,
-          horas,
-          sesiones_totales
-
-        )
-
-        VALUES
-        ($1,$2,$3,$4)
-
-        ON CONFLICT
-        (plan_curso_id, maquina_id)
-
-        DO UPDATE SET
-
-          horas = EXCLUDED.horas,
-          sesiones_totales = EXCLUDED.sesiones_totales
-        `,
-        [
-          idPlan,
-          m.id,
-          m.horas,
-          m.sesiones_totales
-        ]
-      );
-
-    }
-
-    await client.query('COMMIT');
-
-    return {
-
-      ok: true
-
-    };
-
-  } catch (error) {
-
-    await client.query('ROLLBACK');
-
-    throw error;
-
-  } finally {
-
-    client.release();
-
-  }
 
 }
-
 module.exports = {
   listarPlanesCurso,
   listarPlanesCursoActivos,
