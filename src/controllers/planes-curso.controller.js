@@ -367,5 +367,6 @@ module.exports = {
   cambiarEstado,
   obtenerPorId,
   maquinas,
-  guardarConfiguracion
+  guardarConfiguracion,
+  crearPlanCursoCompleto
 };
