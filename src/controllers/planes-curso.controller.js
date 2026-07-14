@@ -168,44 +168,44 @@ async function obtenerPorId(req,res){
   }
 
 }
+async function guardarConfiguracion(req, res) {
 
-async function guardarConfiguracion(req,res){
+  try {
 
+    const data =
+      await planesCursoService.guardarConfiguracionPlan(
 
-    try{
+        req.params.id,
 
+        req.body.plan,
 
-        const data =
-        await planesCursoService.guardarConfiguracionPlan(
-            req.params.id,
-            req.body.maquinas
-        );
+        req.body.maquinas
 
+      );
 
-        res.json({
+    res.json({
 
-            ok:true,
-            message:"Configuración guardada correctamente",
-            data
+      ok: true,
 
-        });
+      message: "Configuración guardada correctamente",
 
+      data
 
-    }catch(error){
+    });
 
+  } catch (error) {
 
-        console.error(error);
+    console.error(error);
 
+    res.status(500).json({
 
-        res.status(500).json({
+      ok: false,
 
-            ok:false,
-            message:"Error guardando configuración"
+      message: "Error guardando configuración"
 
-        });
+    });
 
-
-    }
+  }
 
 }
 
