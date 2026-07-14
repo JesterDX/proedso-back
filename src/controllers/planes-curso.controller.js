@@ -140,6 +140,141 @@ async function crear(req,res){
 
 }
 
+
+async function crearPlanCursoCompleto(data) {
+
+  const client = await pool.connect();
+
+
+  try {
+
+    await client.query('BEGIN');
+
+
+    // ==================================
+    // 1. CREAR PLAN
+    // ==================================
+
+    const planResult = await client.query(
+      `
+      INSERT INTO planes_curso
+      (
+        codigo,
+        nombre,
+        version,
+        tipo_curso_id,
+        permite_eleccion_personalizada,
+        vigente_desde,
+        vigente_hasta,
+        activo,
+        observaciones
+      )
+      VALUES
+      ($1,$2,$3,$4,$5,$6,$7,true,$8)
+      RETURNING *
+      `,
+      [
+        data.codigo,
+        data.nombre,
+        data.version,
+        data.tipo_curso_id,
+        data.permite_eleccion_personalizada,
+        data.vigente_desde,
+        data.vigente_hasta,
+        data.observaciones
+      ]
+    );
+
+
+    const plan = planResult.rows[0];
+
+
+
+    // ==================================
+    // 2. CONFIGURAR MAQUINAS
+    // ==================================
+
+    for(const m of data.maquinas){
+
+
+      if(!m.seleccionada)
+        continue;
+
+
+
+      await client.query(
+        `
+        INSERT INTO plan_maquinas
+        (
+          plan_curso_id,
+          maquina_id,
+          obligatoria,
+          es_regalo,
+          orden
+        )
+        VALUES
+        ($1,$2,$3,$4,$5)
+        `,
+        [
+          plan.id,
+          m.id,
+          m.obligatoria,
+          m.es_regalo,
+          m.orden
+        ]
+      );
+
+
+
+      await client.query(
+        `
+        INSERT INTO plan_horas_practica
+        (
+          plan_curso_id,
+          maquina_id,
+          horas,
+          sesiones_totales
+        )
+        VALUES
+        ($1,$2,$3,$4)
+        `,
+        [
+          plan.id,
+          m.id,
+          m.horas,
+          m.sesiones_totales
+        ]
+      );
+
+
+    }
+
+
+
+    await client.query('COMMIT');
+
+
+    return plan;
+
+
+
+  }catch(error){
+
+
+    await client.query('ROLLBACK');
+
+    throw error;
+
+
+  }finally{
+
+    client.release();
+
+  }
+
+
+}
+
 async function obtenerPorId(req,res){
 
   try{
