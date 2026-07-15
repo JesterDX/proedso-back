@@ -359,6 +359,49 @@ async function guardarConfiguracion(req,res){
 
 }
 
+async function crearCompleto(req,res){
+
+  try{
+
+
+    const data =
+    await planesCursoService.crearPlanCursoCompleto(
+      req.body
+    );
+
+
+    res.status(201).json({
+
+      ok:true,
+
+      message:
+      "Plan creado correctamente",
+
+      data
+
+    });
+
+
+  }catch(error){
+
+
+    console.error(error);
+
+
+    res.status(500).json({
+
+      ok:false,
+
+      message:
+      "Error creando plan completo"
+
+    });
+
+
+  }
+
+}
+
 module.exports = {
   listar,
   listarPlanesCursoActivos,
@@ -368,5 +411,6 @@ module.exports = {
   obtenerPorId,
   maquinas,
   guardarConfiguracion,
-  crearPlanCursoCompleto
+  crearPlanCursoCompleto,
+  crearCompleto
 };
