@@ -33,6 +33,10 @@ router.post(
   controller.crear
 );
 
+router.post(
+ '/completo',
+ controller.crearCompleto
+);
 
 router.put(
   '/:id/configuracion',
