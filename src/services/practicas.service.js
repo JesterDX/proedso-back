@@ -211,6 +211,158 @@ async function listarAlumnosDisponibles(filtros = {}) {
 
 }
 
+
+async function crearSesionGrupal(payload) {
+
+  const {
+
+    fecha,
+
+    detalle
+
+  } = payload;
+
+  if (!detalle || detalle.length === 0) {
+
+    throw new Error(
+      'No hay alumnos seleccionados.'
+    );
+
+  }
+
+  const client = await pool.connect();
+
+  try {
+
+    await client.query("BEGIN");
+
+    //=========================================
+    // VALIDAR SI YA EXISTE UNA SESIÓN ABIERTA
+    //=========================================
+
+    const abierta = await client.query(
+
+      `
+      SELECT id
+      FROM practicas_sesiones_grupales
+      WHERE estado IN ('PENDIENTE','EN_CURSO')
+      LIMIT 1
+      `
+
+    );
+
+    if (abierta.rows.length > 0) {
+
+      throw new Error(
+        'Ya existe una sesión grupal pendiente.'
+      );
+
+    }
+
+    //=========================================
+    // CREAR SESIÓN GRUPAL
+    //=========================================
+
+    const sesion = await client.query(
+
+      `
+      INSERT INTO practicas_sesiones_grupales(
+
+        fecha,
+
+        estado
+
+      )
+
+      VALUES(
+
+        $1,
+
+        'PENDIENTE'
+
+      )
+
+      RETURNING *
+
+      `,
+
+      [
+
+        fecha
+
+      ]
+
+    );
+
+    const sesionGrupal =
+      sesion.rows[0];
+
+    //=========================================
+    // INSERTAR DETALLE
+    //=========================================
+
+    for(const item of detalle){
+
+      await client.query(
+
+        `
+        INSERT INTO practicas_sesiones_grupales_detalle(
+
+          sesion_grupal_id,
+
+          matricula_maquina_id,
+
+          sesiones_asignadas
+
+        )
+
+        VALUES(
+
+          $1,
+
+          $2,
+
+          $3
+
+        )
+        `,
+
+        [
+
+          sesionGrupal.id,
+
+          item.matriculaMaquinaId,
+
+          item.sesiones
+
+        ]
+
+      );
+
+    }
+
+    await client.query("COMMIT");
+
+    return sesionGrupal;
+
+  }
+
+  catch(error){
+
+    await client.query("ROLLBACK");
+
+    throw error;
+
+  }
+
+  finally{
+
+    client.release();
+
+  }
+
+}
+
 async function validarPracticas(matriculaId) {
 
   const matriculaResult = await pool.query(
@@ -885,6 +1037,7 @@ async function obtenerDetallePracticas(
 }
 module.exports = {
   listarAlumnosDisponibles,
+  crearSesionGrupal,
   validarPracticas,
   listarMatriculasActivas,
   listarPracticasOrdenadas,
