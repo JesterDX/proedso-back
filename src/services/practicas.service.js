@@ -371,6 +371,104 @@ async function crearSesionGrupal(payload) {
 
 }
 
+
+async function obtenerSesionGrupal(id) {
+
+  const result = await pool.query(
+
+    `
+    SELECT
+
+      sg.id,
+
+      sg.fecha,
+
+      sg.estado,
+
+      d.id AS detalle_id,
+
+      d.sesiones_asignadas,
+
+      mm.id AS matricula_maquina_id,
+
+      maq.nombre AS maquina,
+
+      a.nombres || ' ' || a.apellidos AS alumno,
+
+      m.id AS matricula_id
+
+    FROM practicas_sesiones_grupales sg
+
+    INNER JOIN practicas_sesiones_grupales_detalle d
+      ON d.sesion_grupal_id = sg.id
+
+    INNER JOIN matricula_maquinas mm
+      ON mm.id = d.matricula_maquina_id
+
+    INNER JOIN matriculas m
+      ON m.id = mm.matricula_id
+
+    INNER JOIN alumnos a
+      ON a.id = m.alumno_id
+
+    INNER JOIN maquinas maq
+      ON maq.id = mm.maquina_id
+
+    WHERE sg.id=$1
+
+    ORDER BY
+
+      alumno,
+
+      maquina
+
+    `,
+    [id]
+
+  );
+
+  if(result.rows.length===0){
+
+    throw new Error("Sesión no encontrada.");
+
+  }
+
+  const sesion={
+
+    id:result.rows[0].id,
+
+    fecha:result.rows[0].fecha,
+
+    estado:result.rows[0].estado,
+
+    detalle:[]
+
+  };
+
+  result.rows.forEach(r=>{
+
+    sesion.detalle.push({
+
+      detalle_id:Number(r.detalle_id),
+
+      matricula_id:Number(r.matricula_id),
+
+      matricula_maquina_id:Number(r.matricula_maquina_id),
+
+      alumno:r.alumno,
+
+      maquina:r.maquina,
+
+      sesiones_asignadas:Number(r.sesiones_asignadas)
+
+    });
+
+  });
+
+  return sesion;
+
+}
+
 async function validarPracticas(matriculaId) {
 
   const matriculaResult = await pool.query(
