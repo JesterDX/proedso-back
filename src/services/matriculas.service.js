@@ -851,17 +851,39 @@ async function procesarTodo(id, data, user) {
         await regenerarTodo(client, id, data);
       
       }
-    else if (cambioMaquinas) {
-      await client.query(`DELETE FROM matricula_maquinas WHERE matricula_id = $1`, [id]);
-      await client.query(`
-        DELETE FROM cuotas
-        WHERE plan_pago_alumno_id IN (
-          SELECT id FROM planes_pago_alumno WHERE matricula_id = $1
-        )
-      `, [id]);
-      await client.query(`DELETE FROM planes_pago_alumno WHERE matricula_id = $1`, [id]);
-      await regenerarTodo(client, id, data);
-    }
+      else if (cambioMaquinas) {
+      
+        await client.query(`
+            DELETE FROM practicas_asignaciones
+            WHERE matricula_maquina_id IN (
+                SELECT id
+                FROM matricula_maquinas
+                WHERE matricula_id = $1
+            )
+        `, [id]);
+      
+        await client.query(
+            `DELETE FROM matricula_maquinas WHERE matricula_id = $1`,
+            [id]
+        );
+      
+        await client.query(`
+            DELETE FROM cuotas
+            WHERE plan_pago_alumno_id IN (
+                SELECT id
+                FROM planes_pago_alumno
+                WHERE matricula_id = $1
+            )
+        `, [id]);
+      
+        await client.query(
+            `DELETE FROM planes_pago_alumno WHERE matricula_id = $1`,
+            [id]
+        );
+      
+        await regenerarTodo(client, id, data);
+      
+      }
     // 🔥 obtener nombres de máquinas nuevas
     let maquinasTexto = '';
 
