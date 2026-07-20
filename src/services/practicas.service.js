@@ -495,6 +495,55 @@ maq.nombre
 
 }
 
+async function guardarDetalleSesion(id, data) {
+
+  const client = await pool.connect();
+
+  try {
+
+    await client.query("BEGIN");
+
+    for (const item of data.detalle) {
+
+      await client.query(
+        `
+        UPDATE practicas_sesiones_grupales_detalle
+        SET
+
+            asistencia=$1,
+            observaciones=$2,
+            evidencia_url=$3,
+            fecha_registro=NOW()
+
+        WHERE id=$4
+        `,
+        [
+          item.asistencia,
+          item.observaciones || null,
+          item.evidencia_url || null,
+          item.detalle_id
+        ]
+      );
+
+    }
+
+    await client.query("COMMIT");
+
+    return { ok: true };
+
+  } catch (error) {
+
+    await client.query("ROLLBACK");
+    throw error;
+
+  } finally {
+
+    client.release();
+
+  }
+
+}
+
 async function validarPracticas(matriculaId) {
 
   const matriculaResult = await pool.query(
@@ -1171,6 +1220,7 @@ module.exports = {
   listarAlumnosDisponibles,
   crearSesionGrupal,
   obtenerSesionGrupal,
+  guardarDetalleSesion,
   validarPracticas,
   listarMatriculasActivas,
   listarPracticasOrdenadas,
