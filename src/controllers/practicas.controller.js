@@ -1,8 +1,30 @@
 const practicasService = require('../services/practicas.service');
 
+
+
 // ==========================================
 // VALIDAR SI EL ALUMNO PUEDE HACER PRÁCTICAS
 // ==========================================
+
+
+exports.listarAlumnosDisponibles = async (req,res)=>{
+
+   try{
+
+      const alumnos =
+      await practicasService.listarAlumnosDisponibles(req.query);
+
+      res.json(alumnos);
+
+   }catch(err){
+
+      res.status(500).json({
+         message:err.message
+      });
+
+   }
+
+}
 async function validarPracticas(req, res) {
 
   try {
@@ -286,6 +308,7 @@ async function obtenerDetallePracticas(
 
 
 module.exports = {
+  listarAlumnosDisponibles,
   validarPracticas,
   listarMatriculasActivas,
   listarPracticasOrdenadas,
