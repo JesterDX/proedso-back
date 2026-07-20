@@ -35,6 +35,13 @@ router.post(
   '/sesion-grupal',
   practicasController.crearSesionGrupal
 );
+router.get(
+
+  "/sesion-grupal/:id",
+
+  practicasController.obtenerSesionGrupal
+
+);
 // ==========================================
 // ASIGNACIONES
 // ==========================================
