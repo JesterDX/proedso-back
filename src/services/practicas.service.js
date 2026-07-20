@@ -14,46 +14,44 @@ async function listarAlumnosDisponibles(filtros = {}) {
   let sql = `
     SELECT
 
-      m.id                         AS matricula_id,
+      m.id AS matricula_id,
 
-      mm.id                        AS matricula_maquina_id,
+      mm.id AS matricula_maquina_id,
 
       a.nombres || ' ' || a.apellidos AS alumno,
 
-      pc.id                        AS curso_id,
-      pc.nombre                    AS curso,
+      pc.id AS curso_id,
+      pc.nombre AS curso,
 
-      maq.id                       AS maquina_id,
-      maq.nombre                   AS maquina,
+      maq.id AS maquina_id,
+      maq.nombre AS maquina,
+
       m.fecha_matricula,
 
-EXTRACT(YEAR FROM m.fecha_matricula) AS anio,
+      EXTRACT(YEAR FROM m.fecha_matricula)::INT AS anio,
+      EXTRACT(MONTH FROM m.fecha_matricula)::INT AS mes,
 
-EXTRACT(MONTH FROM m.fecha_matricula) AS mes,
+      COALESCE(php.horas,0) * 2 AS sesiones_totales,
 
-      COALESCE(php.horas,0) * 2    AS sesiones_totales,
-
-      COALESCE(pa.sesiones_completadas,0)
-                                AS sesiones_realizadas,
+      COALESCE(pa.sesiones_completadas,0) AS sesiones_realizadas,
 
       (
         COALESCE(php.horas,0) * 2
         -
         COALESCE(pa.sesiones_completadas,0)
-      )                           AS sesiones_restantes,
+      ) AS sesiones_restantes,
 
       CASE
 
-        WHEN EXISTS(
+        WHEN EXISTS (
 
           SELECT 1
-
           FROM planes_pago_alumno ppa
-
           INNER JOIN cuotas c
             ON c.plan_pago_alumno_id=ppa.id
 
-          WHERE ppa.matricula_id=m.id
+          WHERE
+            ppa.matricula_id=m.id
             AND c.saldo_pendiente>0
             AND c.fecha_vencimiento<CURRENT_DATE
 
@@ -61,16 +59,15 @@ EXTRACT(MONTH FROM m.fecha_matricula) AS mes,
 
         THEN 'MOROSO'
 
-        WHEN EXISTS(
+        WHEN EXISTS (
 
           SELECT 1
-
           FROM planes_pago_alumno ppa
-
           INNER JOIN cuotas c
             ON c.plan_pago_alumno_id=ppa.id
 
-          WHERE ppa.matricula_id=m.id
+          WHERE
+            ppa.matricula_id=m.id
             AND c.saldo_pendiente>0
 
         )
@@ -79,7 +76,7 @@ EXTRACT(MONTH FROM m.fecha_matricula) AS mes,
 
         ELSE 'AL_DIA'
 
-      END estado_financiero
+      END AS estado_financiero
 
     FROM matriculas m
 
@@ -96,8 +93,8 @@ EXTRACT(MONTH FROM m.fecha_matricula) AS mes,
       ON maq.id=mm.maquina_id
 
     LEFT JOIN plan_horas_practica php
-      ON php.maquina_id=mm.maquina_id
-     AND php.plan_curso_id=m.plan_curso_id
+      ON php.plan_curso_id=m.plan_curso_id
+     AND php.maquina_id=mm.maquina_id
 
     LEFT JOIN practicas_asignaciones pa
       ON pa.matricula_maquina_id=mm.id
@@ -107,88 +104,112 @@ EXTRACT(MONTH FROM m.fecha_matricula) AS mes,
 
   const values = [];
 
+  if (anio) {
+    values.push(anio);
+    sql += `
+      AND EXTRACT(YEAR FROM m.fecha_matricula)= $${values.length}
+    `;
+  }
+
+  if (mes) {
+    values.push(mes);
+    sql += `
+      AND EXTRACT(MONTH FROM m.fecha_matricula)= $${values.length}
+    `;
+  }
+
   if (cursoId) {
     values.push(cursoId);
-    sql += ` AND pc.id=$${values.length}`;
+    sql += `
+      AND pc.id=$${values.length}
+    `;
   }
 
   if (maquinaId) {
     values.push(maquinaId);
-    sql += ` AND maq.id=$${values.length}`;
+    sql += `
+      AND maq.id=$${values.length}
+    `;
   }
 
   if (nombre) {
     values.push(`%${nombre}%`);
-    sql += ` AND (a.nombres || ' ' || a.apellidos) ILIKE $${values.length}`;
+    sql += `
+      AND (
+        a.nombres || ' ' || a.apellidos
+      ) ILIKE $${values.length}
+    `;
   }
 
   sql += `
     ORDER BY
-      alumno ASC
+      anio DESC,
+      mes DESC,
+      alumno ASC,
+      maq.nombre ASC
   `;
 
   const result = await pool.query(sql, values);
 
-const filas = result.rows.filter(
-  x => Number(x.sesiones_restantes) > 0
-);
-
-const alumnos = [];
-
-for (const fila of filas) {
-
-  let alumno = alumnos.find(
-    a => a.matricula_id == fila.matricula_id
+  const filas = result.rows.filter(
+    fila => Number(fila.sesiones_restantes) > 0
   );
 
-  if (!alumno) {
+  const alumnos = [];
 
-alumno = {
+  for (const fila of filas) {
 
-  matricula_id: fila.matricula_id,
+    let alumno = alumnos.find(
+      a => a.matricula_id == fila.matricula_id
+    );
 
-  alumno: fila.alumno,
+    if (!alumno) {
 
-  curso_id: fila.curso_id,
+      alumno = {
 
-  curso: fila.curso,
+        matricula_id: Number(fila.matricula_id),
 
-  anio: Number(fila.anio),
+        alumno: fila.alumno,
 
-  mes: Number(fila.mes),
+        curso_id: Number(fila.curso_id),
 
-  estado_financiero: fila.estado_financiero,
+        curso: fila.curso,
 
-  maquinas: []
+        anio: Number(fila.anio),
 
-};
+        mes: Number(fila.mes),
 
-    alumnos.push(alumno);
+        estado_financiero: fila.estado_financiero,
+
+        maquinas: []
+
+      };
+
+      alumnos.push(alumno);
+
+    }
+
+    alumno.maquinas.push({
+
+      matricula_maquina_id: Number(fila.matricula_maquina_id),
+
+      maquina_id: Number(fila.maquina_id),
+
+      maquina: fila.maquina,
+
+      sesiones_totales: Number(fila.sesiones_totales),
+
+      sesiones_realizadas: Number(fila.sesiones_realizadas),
+
+      sesiones_restantes: Number(fila.sesiones_restantes)
+
+    });
 
   }
 
-  alumno.maquinas.push({
-
-    matricula_maquina_id: fila.matricula_maquina_id,
-
-    maquina_id: fila.maquina_id,
-
-    maquina: fila.maquina,
-
-    sesiones_totales: Number(fila.sesiones_totales),
-
-    sesiones_realizadas: Number(fila.sesiones_realizadas),
-
-    sesiones_restantes: Number(fila.sesiones_restantes)
-
-  });
+  return alumnos;
 
 }
-
-return alumnos;
-
-}
-
 
 async function validarPracticas(matriculaId) {
 
