@@ -31,6 +31,10 @@ router.get(
    practicasController.listarAlumnosDisponibles
 );
 
+router.post(
+  '/sesion-grupal',
+  practicasController.crearSesionGrupal
+);
 // ==========================================
 // ASIGNACIONES
 // ==========================================
