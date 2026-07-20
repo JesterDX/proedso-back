@@ -31,6 +31,43 @@ async function listarAlumnosDisponibles(req, res) {
   }
 
 }
+
+
+// ==========================================
+// CREAR SESIÓN GRUPAL
+// ==========================================
+async function crearSesionGrupal(req, res) {
+
+  try {
+
+    const data =
+      await practicasService.crearSesionGrupal(req.body);
+
+    return res.json({
+
+      ok: true,
+
+      data
+
+    });
+
+  }
+
+  catch(error){
+
+    console.error(error);
+
+    return res.status(500).json({
+
+      ok:false,
+
+      error:error.message
+
+    });
+
+  }
+
+}
 async function validarPracticas(req, res) {
 
   try {
@@ -315,6 +352,7 @@ async function obtenerDetallePracticas(
 
 module.exports = {
   listarAlumnosDisponibles,
+  crearSesionGrupal,
   validarPracticas,
   listarMatriculasActivas,
   listarPracticasOrdenadas,
