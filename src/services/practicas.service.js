@@ -25,6 +25,11 @@ async function listarAlumnosDisponibles(filtros = {}) {
 
       maq.id                       AS maquina_id,
       maq.nombre                   AS maquina,
+      m.fecha_matricula,
+
+EXTRACT(YEAR FROM m.fecha_matricula) AS anio,
+
+EXTRACT(MONTH FROM m.fecha_matricula) AS mes
 
       COALESCE(php.horas,0) * 2    AS sesiones_totales,
 
@@ -124,9 +129,59 @@ async function listarAlumnosDisponibles(filtros = {}) {
 
   const result = await pool.query(sql, values);
 
-  return result.rows.filter(
-    x => x.sesiones_restantes > 0
+const filas = result.rows.filter(
+  x => Number(x.sesiones_restantes) > 0
+);
+
+const alumnos = [];
+
+for (const fila of filas) {
+
+  let alumno = alumnos.find(
+    a => a.matricula_id == fila.matricula_id
   );
+
+  if (!alumno) {
+
+    alumno = {
+
+      matricula_id: fila.matricula_id,
+
+      alumno: fila.alumno,
+
+      curso_id: fila.curso_id,
+
+      curso: fila.curso,
+
+      estado_financiero: fila.estado_financiero,
+
+      maquinas: []
+
+    };
+
+    alumnos.push(alumno);
+
+  }
+
+  alumno.maquinas.push({
+
+    matricula_maquina_id: fila.matricula_maquina_id,
+
+    maquina_id: fila.maquina_id,
+
+    maquina: fila.maquina,
+
+    sesiones_totales: Number(fila.sesiones_totales),
+
+    sesiones_realizadas: Number(fila.sesiones_realizadas),
+
+    sesiones_restantes: Number(fila.sesiones_restantes)
+
+  });
+
+}
+
+return alumnos;
 
 }
 
