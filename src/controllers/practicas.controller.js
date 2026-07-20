@@ -7,22 +7,28 @@ const practicasService = require('../services/practicas.service');
 // ==========================================
 
 
-exports.listarAlumnosDisponibles = async (req,res)=>{
+async function listarAlumnosDisponibles(req, res) {
 
-   try{
+  try {
 
-      const alumnos =
+    const alumnos =
       await practicasService.listarAlumnosDisponibles(req.query);
 
-      res.json(alumnos);
+    return res.json({
+      ok: true,
+      data: alumnos
+    });
 
-   }catch(err){
+  } catch (error) {
 
-      res.status(500).json({
-         message:err.message
-      });
+    console.error(error);
 
-   }
+    return res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+
+  }
 
 }
 async function validarPracticas(req, res) {
