@@ -42,6 +42,10 @@ router.get(
   practicasController.obtenerSesionGrupal
 
 );
+router.put(
+    "/sesion-grupal/:id",
+    guardarDetalleSesionController
+);
 // ==========================================
 // ASIGNACIONES
 // ==========================================
@@ -58,6 +62,7 @@ router.get(
   '/detalle/:matriculaId',
   practicasController.obtenerDetallePracticas
 );
+
 
 // ==========================================
 // SESIONES
