@@ -566,17 +566,50 @@ async function crearMatricula(data, user) {
     const maquinasTexto = nombresMaquinas.join(', ');
 
     for (const item of maquinasAGuardar) {
-      const horasPlan = await obtenerHorasPlanPorMaquina(client, data.plan_curso_id, item.maquina_id);
-
+    
+      const horasPlan =
+        await obtenerHorasPlanPorMaquina(
+          client,
+          data.plan_curso_id,
+          item.maquina_id
+        );
+    
       await insertarMatriculaMaquina(client, {
-        matricula_id: nuevaMatricula.id,
+        matricula_id: matriculaId,
         maquina_id: item.maquina_id,
         orden: item.orden,
         es_regalo: item.es_regalo,
-        horas_asignadas: horasPlan ? Number(horasPlan.horas) : 1,
-        sesiones_totales: horasPlan ? Number(horasPlan.sesiones_totales) : 1
+        horas_asignadas: horasPlan
+          ? Number(horasPlan.horas)
+          : 1,
+        sesiones_totales: horasPlan
+          ? Number(horasPlan.sesiones_totales)
+          : 1
       });
+    
     }
+    
+    // ==========================================
+    // REGENERAR ASIGNACIONES DE PRÁCTICAS
+    // ==========================================
+    
+    await client.query(
+      `
+      DELETE FROM practicas_asignaciones
+      WHERE matricula_maquina_id IN (
+          SELECT id
+          FROM matricula_maquinas
+          WHERE matricula_id = $1
+      )
+      `,
+      [matriculaId]
+    );
+    
+    await generarAsignacionesPracticas(
+      client,
+      matriculaId,
+      data.plan_curso_id
+    );
 
     const planPrecio = await obtenerPlanPrecioVigente(
       client,
@@ -782,17 +815,42 @@ async function procesarTodo(id, data, user) {
         id
       ]
     );
-    if (cambioPlan) {
-      await client.query(`DELETE FROM matricula_maquinas WHERE matricula_id = $1`, [id]);
-      await client.query(`
-        DELETE FROM cuotas
-        WHERE plan_pago_alumno_id IN (
-          SELECT id FROM planes_pago_alumno WHERE matricula_id = $1
-        )
-      `, [id]);
-      await client.query(`DELETE FROM planes_pago_alumno WHERE matricula_id = $1`, [id]);
-      await regenerarTodo(client, id, data);
-    }
+      if (cambioPlan) {
+      
+        // eliminar asignaciones
+        await client.query(`
+            DELETE FROM practicas_asignaciones
+            WHERE matricula_maquina_id IN (
+                SELECT id
+                FROM matricula_maquinas
+                WHERE matricula_id = $1
+            )
+        `, [id]);
+      
+        // eliminar máquinas
+        await client.query(
+            `DELETE FROM matricula_maquinas WHERE matricula_id = $1`,
+            [id]
+        );
+      
+        // eliminar cuotas
+        await client.query(`
+            DELETE FROM cuotas
+            WHERE plan_pago_alumno_id IN (
+                SELECT id
+                FROM planes_pago_alumno
+                WHERE matricula_id = $1
+            )
+        `, [id]);
+      
+        await client.query(
+            `DELETE FROM planes_pago_alumno WHERE matricula_id = $1`,
+            [id]
+        );
+      
+        await regenerarTodo(client, id, data);
+      
+      }
     else if (cambioMaquinas) {
       await client.query(`DELETE FROM matricula_maquinas WHERE matricula_id = $1`, [id]);
       await client.query(`
