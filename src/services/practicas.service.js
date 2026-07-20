@@ -356,13 +356,21 @@ async function crearSesionGrupal(payload) {
     return sesionGrupal;
 
   }
-  catch(error){
-
-    await client.query("ROLLBACK");
-
-    throw error;
-
-  }
+    catch (error) {
+    
+      console.error("=================================");
+      console.error("ERROR crearSesionGrupal");
+      console.error(error);
+      console.error(error.message);
+      console.error(error.stack);
+      console.error("=================================");
+    
+      return res.status(500).json({
+        ok: false,
+        error: error.message
+      });
+    
+    }
   finally{
 
     client.release();
