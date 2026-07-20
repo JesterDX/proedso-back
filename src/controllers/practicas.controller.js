@@ -68,6 +68,45 @@ async function crearSesionGrupal(req, res) {
   }
 
 }
+
+
+async function obtenerSesionGrupal(req,res){
+
+  try{
+
+    const data=
+
+      await practicasService.obtenerSesionGrupal(
+
+        req.params.id
+
+      );
+
+    return res.json({
+
+      ok:true,
+
+      data
+
+    });
+
+  }
+
+  catch(error){
+
+    console.error(error);
+
+    return res.status(500).json({
+
+      ok:false,
+
+      error:error.message
+
+    });
+
+  }
+
+}
 async function validarPracticas(req, res) {
 
   try {
@@ -353,6 +392,11 @@ async function obtenerDetallePracticas(
 module.exports = {
   listarAlumnosDisponibles,
   crearSesionGrupal,
+  obtenerSesionGrupal,
+
+
+
+  
   validarPracticas,
   listarMatriculasActivas,
   listarPracticasOrdenadas,
