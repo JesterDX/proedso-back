@@ -29,7 +29,7 @@ async function listarAlumnosDisponibles(filtros = {}) {
 
 EXTRACT(YEAR FROM m.fecha_matricula) AS anio,
 
-EXTRACT(MONTH FROM m.fecha_matricula) AS mes
+EXTRACT(MONTH FROM m.fecha_matricula) AS mes,
 
       COALESCE(php.horas,0) * 2    AS sesiones_totales,
 
@@ -143,21 +143,25 @@ for (const fila of filas) {
 
   if (!alumno) {
 
-    alumno = {
+alumno = {
 
-      matricula_id: fila.matricula_id,
+  matricula_id: fila.matricula_id,
 
-      alumno: fila.alumno,
+  alumno: fila.alumno,
 
-      curso_id: fila.curso_id,
+  curso_id: fila.curso_id,
 
-      curso: fila.curso,
+  curso: fila.curso,
 
-      estado_financiero: fila.estado_financiero,
+  anio: Number(fila.anio),
 
-      maquinas: []
+  mes: Number(fila.mes),
 
-    };
+  estado_financiero: fila.estado_financiero,
+
+  maquinas: []
+
+};
 
     alumnos.push(alumno);
 
