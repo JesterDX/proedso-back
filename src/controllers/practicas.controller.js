@@ -107,6 +107,30 @@ async function obtenerSesionGrupal(req,res){
   }
 
 }
+
+async function guardarDetalleSesionController(req, res) {
+
+  try {
+
+    const id = Number(req.params.id);
+
+    const resultado =
+      await practicasService.guardarDetalleSesion(
+        id,
+        req.body
+      );
+
+    res.json(resultado);
+
+  } catch (error) {
+
+    res.status(500).json({
+      message: error.message
+    });
+
+  }
+
+}
 async function validarPracticas(req, res) {
 
   try {
@@ -393,6 +417,7 @@ module.exports = {
   listarAlumnosDisponibles,
   crearSesionGrupal,
   obtenerSesionGrupal,
+  guardarDetalleSesionController,
 
 
 
