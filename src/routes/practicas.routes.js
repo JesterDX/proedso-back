@@ -43,8 +43,8 @@ router.get(
 
 );
 router.put(
-    "/sesion-grupal/:id",
-    guardarDetalleSesionController
+  "/sesion-grupal/:id",
+  practicasController.guardarDetalleSesionController
 );
 // ==========================================
 // ASIGNACIONES
