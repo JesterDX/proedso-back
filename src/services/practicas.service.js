@@ -211,23 +211,12 @@ async function listarAlumnosDisponibles(filtros = {}) {
 
 }
 
-
 async function crearSesionGrupal(payload) {
 
-  const {
-
-    fecha,
-
-    detalle
-
-  } = payload;
+  const { fecha, detalle } = payload;
 
   if (!detalle || detalle.length === 0) {
-
-    throw new Error(
-      'No hay alumnos seleccionados.'
-    );
-
+    throw new Error("No hay alumnos seleccionados.");
   }
 
   const client = await pool.connect();
@@ -237,35 +226,72 @@ async function crearSesionGrupal(payload) {
     await client.query("BEGIN");
 
     //=========================================
-    // VALIDAR SI YA EXISTE UNA SESIÓN ABIERTA
+    // SOLO UNA SESIÓN ABIERTA
     //=========================================
 
-    const abierta = await client.query(
-
-      `
+    const abierta = await client.query(`
       SELECT id
       FROM practicas_sesiones_grupales
       WHERE estado IN ('PENDIENTE','EN_CURSO')
       LIMIT 1
-      `
-
-    );
+    `);
 
     if (abierta.rows.length > 0) {
+      throw new Error("Ya existe una sesión grupal pendiente.");
+    }
 
-      throw new Error(
-        'Ya existe una sesión grupal pendiente.'
-      );
+    //=========================================
+    // VALIDAR CADA ALUMNO
+    //=========================================
+
+    for (const item of detalle) {
+
+      const validar = await client.query(`
+        SELECT
+
+          mm.id,
+
+          pa.sesiones_totales,
+
+          pa.sesiones_completadas,
+
+          (
+            pa.sesiones_totales -
+            pa.sesiones_completadas
+          ) AS sesiones_restantes
+
+        FROM matricula_maquinas mm
+
+        INNER JOIN practicas_asignaciones pa
+          ON pa.matricula_maquina_id = mm.id
+
+        WHERE mm.id = $1
+      `,[item.matriculaMaquinaId]);
+
+      if(validar.rows.length===0){
+        throw new Error(
+          "No existe asignación de prácticas."
+        );
+      }
+
+      const restante =
+        Number(validar.rows[0].sesiones_restantes);
+
+      if(item.sesiones>restante){
+
+        throw new Error(
+          `La máquina ${item.matriculaMaquinaId} solo tiene ${restante} sesiones restantes.`
+        );
+
+      }
 
     }
 
     //=========================================
-    // CREAR SESIÓN GRUPAL
+    // CREAR SESIÓN
     //=========================================
 
-    const sesion = await client.query(
-
-      `
+    const sesion = await client.query(`
       INSERT INTO practicas_sesiones_grupales(
 
         fecha,
@@ -283,19 +309,9 @@ async function crearSesionGrupal(payload) {
       )
 
       RETURNING *
+    `,[fecha]);
 
-      `,
-
-      [
-
-        fecha
-
-      ]
-
-    );
-
-    const sesionGrupal =
-      sesion.rows[0];
+    const sesionGrupal = sesion.rows[0];
 
     //=========================================
     // INSERTAR DETALLE
@@ -303,9 +319,7 @@ async function crearSesionGrupal(payload) {
 
     for(const item of detalle){
 
-      await client.query(
-
-        `
+      await client.query(`
         INSERT INTO practicas_sesiones_grupales_detalle(
 
           sesion_grupal_id,
@@ -325,19 +339,15 @@ async function crearSesionGrupal(payload) {
           $3
 
         )
-        `,
+      `,[
 
-        [
+        sesionGrupal.id,
 
-          sesionGrupal.id,
+        item.matriculaMaquinaId,
 
-          item.matriculaMaquinaId,
+        item.sesiones
 
-          item.sesiones
-
-        ]
-
-      );
+      ]);
 
     }
 
@@ -346,7 +356,6 @@ async function crearSesionGrupal(payload) {
     return sesionGrupal;
 
   }
-
   catch(error){
 
     await client.query("ROLLBACK");
@@ -354,7 +363,6 @@ async function crearSesionGrupal(payload) {
     throw error;
 
   }
-
   finally{
 
     client.release();
