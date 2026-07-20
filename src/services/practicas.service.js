@@ -386,49 +386,54 @@ async function obtenerSesionGrupal(id) {
     `
     SELECT
 
-      sg.id,
+  sg.id,
+  sg.fecha,
+  sg.estado,
 
-      sg.fecha,
+  d.id AS detalle_id,
+  d.sesiones_asignadas,
 
-      sg.estado,
+  d.asistencia,
+  d.observaciones,
+  d.evidencia_url,
 
-      d.id AS detalle_id,
+  mm.id AS matricula_maquina_id,
 
-      d.sesiones_asignadas,
+  maq.id AS maquina_id,
+  maq.nombre AS maquina,
 
-      mm.id AS matricula_maquina_id,
+  m.id AS matricula_id,
 
-      maq.nombre AS maquina,
+  a.id AS alumno_id,
+  a.nombres,
+  a.apellidos,
 
-      a.nombres || ' ' || a.apellidos AS alumno,
+  a.nombres || ' ' || a.apellidos AS alumno
 
-      m.id AS matricula_id
+FROM practicas_sesiones_grupales sg
 
-    FROM practicas_sesiones_grupales sg
+INNER JOIN practicas_sesiones_grupales_detalle d
+ON d.sesion_grupal_id = sg.id
 
-    INNER JOIN practicas_sesiones_grupales_detalle d
-      ON d.sesion_grupal_id = sg.id
+INNER JOIN matricula_maquinas mm
+ON mm.id = d.matricula_maquina_id
 
-    INNER JOIN matricula_maquinas mm
-      ON mm.id = d.matricula_maquina_id
+INNER JOIN matriculas m
+ON m.id = mm.matricula_id
 
-    INNER JOIN matriculas m
-      ON m.id = mm.matricula_id
+INNER JOIN alumnos a
+ON a.id = m.alumno_id
 
-    INNER JOIN alumnos a
-      ON a.id = m.alumno_id
+INNER JOIN maquinas maq
+ON maq.id = mm.maquina_id
 
-    INNER JOIN maquinas maq
-      ON maq.id = mm.maquina_id
+WHERE sg.id = $1
 
-    WHERE sg.id=$1
+ORDER BY
 
-    ORDER BY
-
-      alumno,
-
-      maquina
-
+a.apellidos,
+a.nombres,
+maq.nombre
     `,
     [id]
 
@@ -455,19 +460,33 @@ async function obtenerSesionGrupal(id) {
   result.rows.forEach(r=>{
 
     sesion.detalle.push({
-
-      detalle_id:Number(r.detalle_id),
-
-      matricula_id:Number(r.matricula_id),
-
-      matricula_maquina_id:Number(r.matricula_maquina_id),
-
-      alumno:r.alumno,
-
-      maquina:r.maquina,
-
-      sesiones_asignadas:Number(r.sesiones_asignadas)
-
+    
+      detalle_id: Number(r.detalle_id),
+    
+      matricula_id: Number(r.matricula_id),
+    
+      matricula_maquina_id: Number(r.matricula_maquina_id),
+    
+      alumno_id: Number(r.alumno_id),
+    
+      alumno: r.alumno,
+    
+      nombres: r.nombres,
+    
+      apellidos: r.apellidos,
+    
+      maquina_id: Number(r.maquina_id),
+    
+      maquina: r.maquina,
+    
+      sesiones_asignadas: Number(r.sesiones_asignadas),
+    
+      asistencia: r.asistencia,
+    
+      observaciones: r.observaciones,
+    
+      evidencia_url: r.evidencia_url
+    
     });
 
   });
