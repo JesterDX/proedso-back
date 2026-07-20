@@ -1,6 +1,136 @@
 const pool = require('../config/db');
 
 
+async function listarAlumnosDisponibles(filtros = {}) {
+
+  const {
+    anio,
+    mes,
+    cursoId,
+    maquinaId,
+    nombre
+  } = filtros;
+
+  let sql = `
+    SELECT
+
+      m.id                         AS matricula_id,
+
+      mm.id                        AS matricula_maquina_id,
+
+      a.nombres || ' ' || a.apellidos AS alumno,
+
+      pc.id                        AS curso_id,
+      pc.nombre                    AS curso,
+
+      maq.id                       AS maquina_id,
+      maq.nombre                   AS maquina,
+
+      COALESCE(php.horas,0) * 2    AS sesiones_totales,
+
+      COALESCE(pa.sesiones_completadas,0)
+                                AS sesiones_realizadas,
+
+      (
+        COALESCE(php.horas,0) * 2
+        -
+        COALESCE(pa.sesiones_completadas,0)
+      )                           AS sesiones_restantes,
+
+      CASE
+
+        WHEN EXISTS(
+
+          SELECT 1
+
+          FROM planes_pago_alumno ppa
+
+          INNER JOIN cuotas c
+            ON c.plan_pago_alumno_id=ppa.id
+
+          WHERE ppa.matricula_id=m.id
+            AND c.saldo_pendiente>0
+            AND c.fecha_vencimiento<CURRENT_DATE
+
+        )
+
+        THEN 'MOROSO'
+
+        WHEN EXISTS(
+
+          SELECT 1
+
+          FROM planes_pago_alumno ppa
+
+          INNER JOIN cuotas c
+            ON c.plan_pago_alumno_id=ppa.id
+
+          WHERE ppa.matricula_id=m.id
+            AND c.saldo_pendiente>0
+
+        )
+
+        THEN 'PENDIENTE'
+
+        ELSE 'AL_DIA'
+
+      END estado_financiero
+
+    FROM matriculas m
+
+    INNER JOIN alumnos a
+      ON a.id=m.alumno_id
+
+    INNER JOIN planes_curso pc
+      ON pc.id=m.plan_curso_id
+
+    INNER JOIN matricula_maquinas mm
+      ON mm.matricula_id=m.id
+
+    INNER JOIN maquinas maq
+      ON maq.id=mm.maquina_id
+
+    LEFT JOIN plan_horas_practica php
+      ON php.maquina_id=mm.maquina_id
+     AND php.plan_curso_id=m.plan_curso_id
+
+    LEFT JOIN practicas_asignaciones pa
+      ON pa.matricula_maquina_id=mm.id
+
+    WHERE 1=1
+  `;
+
+  const values = [];
+
+  if (cursoId) {
+    values.push(cursoId);
+    sql += ` AND pc.id=$${values.length}`;
+  }
+
+  if (maquinaId) {
+    values.push(maquinaId);
+    sql += ` AND maq.id=$${values.length}`;
+  }
+
+  if (nombre) {
+    values.push(`%${nombre}%`);
+    sql += ` AND (a.nombres || ' ' || a.apellidos) ILIKE $${values.length}`;
+  }
+
+  sql += `
+    ORDER BY
+      alumno ASC
+  `;
+
+  const result = await pool.query(sql, values);
+
+  return result.rows.filter(
+    x => x.sesiones_restantes > 0
+  );
+
+}
+
+
 async function validarPracticas(matriculaId) {
 
   const matriculaResult = await pool.query(
@@ -674,6 +804,7 @@ async function obtenerDetallePracticas(
 
 }
 module.exports = {
+  listarAlumnosDisponibles,
   validarPracticas,
   listarMatriculasActivas,
   listarPracticasOrdenadas,
