@@ -1144,6 +1144,7 @@ async function obtenerDetallePracticas(
 module.exports = {
   listarAlumnosDisponibles,
   crearSesionGrupal,
+  obtenerSesionGrupal,
   validarPracticas,
   listarMatriculasActivas,
   listarPracticasOrdenadas,
