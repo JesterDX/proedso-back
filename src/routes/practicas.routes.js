@@ -26,6 +26,11 @@ router.get(
   practicasController.listarPracticasOrdenadas
 );
 
+router.get(
+   '/alumnos-disponibles',
+   practicasController.listarAlumnosDisponibles
+);
+
 // ==========================================
 // ASIGNACIONES
 // ==========================================
