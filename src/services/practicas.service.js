@@ -495,6 +495,8 @@ async function obtenerSesionGrupal(id) {
   sg.id,
   sg.fecha,
   sg.estado,
+  lp.id AS lugar_practica_id,
+  lp.nombre AS lugar_practica,
 
   d.id AS detalle_id,
   d.sesiones_asignadas,
