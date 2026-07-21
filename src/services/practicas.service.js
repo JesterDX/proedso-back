@@ -838,172 +838,38 @@ async function listarHistorialSesiones() {
 
   return Array.from(sesionesMap.values());
 }
-async function validarPracticas(matriculaId) {
+// 1. Modifica la firma y las consultas dentro de validarPracticas
+async function validarPracticas(matriculaId, dbClient = null) {
+  const client = dbClient || pool; // Usa el client de la transacción si viene informado
 
-  const matriculaResult = await pool.query(
-    `
-    SELECT
-      m.id,
-      a.nombres || ' ' || a.apellidos AS alumno
-    FROM matriculas m
-    INNER JOIN alumnos a
-      ON a.id = m.alumno_id
-    WHERE m.id = $1
-    `,
+  const result = await client.query(
+    `SELECT * FROM matriculas WHERE id = $1`,
     [matriculaId]
   );
 
-  if (!matriculaResult.rows.length) {
+  const matricula = result.rows[0];
+  if (!matricula) {
     throw new Error('No se encontró la matrícula.');
   }
 
-  // ==========================================
-  // VALIDAR PAGOS
-  // ==========================================
-  const cuotasResult = await pool.query(
-    `
-    SELECT COUNT(*) AS total
-    FROM cuotas c
-
-    INNER JOIN conceptos_cobro cc
-      ON cc.id = c.concepto_id
-
-    INNER JOIN planes_pago_alumno ppa
-      ON ppa.id = c.plan_pago_alumno_id
-
-    WHERE ppa.matricula_id = $1
-      AND cc.codigo = 'CUOTA'
-      AND c.fecha_vencimiento < CURRENT_DATE
-      AND c.saldo_pendiente > 0
-    `,
-    [matriculaId]
-  );
-
-  const cuotasVencidas =
-    Number(cuotasResult.rows[0].total || 0);
-
-  return {
-    alumno: matriculaResult.rows[0].alumno,
-    puede_practicar: cuotasVencidas < 2,
-    cuotas_vencidas: cuotasVencidas
-  };
-
+  // ... resto de tu lógica de validación ...
 }
 
-// ==========================================
-// CREAR ASIGNACIONES
-// ==========================================
+// 2. Modifica crearAsignacionPracticas para pasar dbClient a validarPracticas
 async function crearAsignacionPracticas(matriculaId, dbClient = null) {
-  // Si nos pasan un client activo usamos ese; si no, abrimos uno del pool
   const client = dbClient || await pool.connect();
   const esConexionPropia = !dbClient;
 
   try {
     if (esConexionPropia) await client.query('BEGIN');
 
-    // Pasar 'client' a la validación para que vea los datos no comiteados aún
+    // 👈 AQUÍ: Pasa 'client' a la validación
     const validacion = await validarPracticas(matriculaId, client);
 
-    if (!validacion.puede_practicar) {
-      throw new Error('Alumno no habilitado para prácticas.');
-    }
-
-    // ==========================================
-    // OBTENER MÁQUINAS
-    // ==========================================
-    const maquinasResult = await client.query(
-      `
-      SELECT
-        mm.id AS matricula_maquina_id,
-        mm.matricula_id,
-        mm.maquina_id,
-        maq.nombre AS maquina,
-        php.horas AS horas_practica
-      FROM matricula_maquinas mm
-      INNER JOIN maquinas maq
-        ON maq.id = mm.maquina_id
-      INNER JOIN matriculas m
-        ON m.id = mm.matricula_id
-      LEFT JOIN plan_horas_practica php
-        ON php.maquina_id = mm.maquina_id
-       AND php.plan_curso_id = m.plan_curso_id
-      WHERE mm.matricula_id = $1
-      ORDER BY mm.id ASC
-      `,
-      [matriculaId]
-    );
-
-    if (!maquinasResult.rows.length) {
-      throw new Error('No existen máquinas asignadas.');
-    }
-
-    const asignaciones = [];
-
-    for (const maquina of maquinasResult.rows) {
-      // EVITAR DUPLICADOS
-      const existeResult = await client.query(
-        `
-        SELECT id
-        FROM practicas_asignaciones
-        WHERE matricula_maquina_id = $1
-        `,
-        [maquina.matricula_maquina_id]
-      );
-
-      if (existeResult.rows.length > 0) {
-        continue;
-      }
-
-      const horas = Number(maquina.horas_practica || 0);
-      const sesionesTotales = horas * 2;
-
-      // CREAR ASIGNACIÓN
-      const asignacionResult = await client.query(
-        `
-        INSERT INTO practicas_asignaciones (
-          matricula_maquina_id,
-          fecha_inicio,
-          sesiones_totales,
-          sesiones_completadas,
-          estado
-        )
-        VALUES (
-          $1,
-          CURRENT_DATE,
-          $2,
-          0,
-          'PENDIENTE'
-        )
-        RETURNING *
-        `,
-        [maquina.matricula_maquina_id, sesionesTotales]
-      );
-
-      const asignacion = asignacionResult.rows[0];
-
-      // GENERAR SESIONES
-      for (let s = 1; s <= sesionesTotales; s++) {
-        await client.query(
-          `
-          INSERT INTO practicas_sesiones (
-            asignacion_id,
-            numero_sesion,
-            fecha_programada,
-            duracion_minutos,
-            recuperada
-          )
-          VALUES ($1, $2, CURRENT_DATE, 30, false)
-          `,
-          [asignacion.id, s]
-        );
-      }
-
-      asignaciones.push(asignacion);
-    }
+    // ... resto de crearAsignacionPracticas ...
 
     if (esConexionPropia) await client.query('COMMIT');
     return asignaciones;
-
   } catch (error) {
     if (esConexionPropia) await client.query('ROLLBACK');
     throw error;
