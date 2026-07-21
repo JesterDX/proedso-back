@@ -746,7 +746,7 @@ async function obtenerUltimaPendiente(req, res) {
   try {
     const query = `
       SELECT id 
-      FROM sesiones_grupales 
+      FROM practicas_sesiones_grupales 
       WHERE estado = 'PENDIENTE' 
       ORDER BY id DESC 
       LIMIT 1;
