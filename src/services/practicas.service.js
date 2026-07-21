@@ -869,18 +869,25 @@ async function obtenerUltimaPendiente() {
 
   const result = await pool.query(
     `
-    SELECT
-      id,
-      fecha,
-      estado
+SELECT
 
-    FROM practicas_sesiones_grupales
+    sg.id,
+    sg.fecha,
+    sg.estado,
 
-    WHERE estado = 'PENDIENTE'
+    lp.nombre AS lugar_practica
 
-    ORDER BY id DESC
+FROM practicas_sesiones_grupales sg
 
-    LIMIT 1
+INNER JOIN lugares_practica lp
+ON lp.id=sg.lugar_practica_id
+
+WHERE sg.estado='PENDIENTE'
+
+ORDER BY
+
+sg.fecha,
+lp.nombre;
     `
   );
 
