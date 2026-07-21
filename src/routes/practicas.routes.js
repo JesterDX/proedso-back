@@ -76,5 +76,8 @@ router.put(
   '/sesiones/:sesionId/asistencia',
   practicasController.registrarAsistencia
 );
-
+router.put(
+    "/sesiones-grupales/:id/cronograma",
+    practicasController.guardarCronograma
+);
 module.exports = router;
