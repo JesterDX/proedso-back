@@ -856,7 +856,7 @@ async function validarPracticas(matriculaId, dbClient = null) {
 }
 
 // 2. Modifica crearAsignacionPracticas para pasar dbClient a validarPracticas
-sync function crearAsignacionPracticas(matriculaId, dbClient = null) {
+async function crearAsignacionPracticas(matriculaId, dbClient = null) {
   const client = dbClient || await pool.connect();
   const esConexionPropia = !dbClient;
 
