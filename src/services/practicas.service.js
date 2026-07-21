@@ -863,22 +863,103 @@ async function crearAsignacionPracticas(matriculaId, dbClient = null) {
   try {
     if (esConexionPropia) await client.query('BEGIN');
 
-    // 1. Validar la matrícula
-    const validacion = await validarPracticas(matriculaId, client);
+    // 1. Validar la matrícula usando el cliente activo
+    await validarPracticas(matriculaId, client);
 
-    // 2. Crear las asignaciones de prácticas usando el client
-    const res = await client.query(
-      `INSERT INTO asignaciones_practicas (matricula_id, ...) VALUES ($1, ...) RETURNING *`,
+    // 2. Obtener las máquinas asignadas a la matrícula
+    const maquinasResult = await client.query(
+      `
+      SELECT
+        mm.id AS matricula_maquina_id,
+        mm.matricula_id,
+        mm.maquina_id,
+        maq.nombre AS maquina,
+        php.horas AS horas_practica
+      FROM matricula_maquinas mm
+      INNER JOIN maquinas maq
+        ON maq.id = mm.maquina_id
+      INNER JOIN matriculas m
+        ON m.id = mm.matricula_id
+      LEFT JOIN plan_horas_practica php
+        ON php.maquina_id = mm.maquina_id
+       AND php.plan_curso_id = m.plan_curso_id
+      WHERE mm.matricula_id = $1
+      ORDER BY mm.id ASC
+      `,
       [matriculaId]
     );
 
-    // 👈 Declaras la variable aquí con los datos que insertaste
-    const asignaciones = res.rows; 
+    if (!maquinasResult.rows.length) {
+      throw new Error('No existen máquinas asignadas a esta matrícula.');
+    }
+
+    const asignaciones = [];
+
+    // 3. Crear la asignación y sesiones para cada máquina
+    for (const maquina of maquinasResult.rows) {
+      // Evitar duplicados si ya existe la asignación
+      const existeResult = await client.query(
+        `
+        SELECT id
+        FROM practicas_asignaciones
+        WHERE matricula_maquina_id = $1
+        `,
+        [maquina.matricula_maquina_id]
+      );
+
+      if (existeResult.rows.length > 0) {
+        continue;
+      }
+
+      const horas = Number(maquina.horas_practica || 0);
+      const sesionesTotales = horas * 2;
+
+      // Crear registro en practicas_asignaciones
+      const asignacionResult = await client.query(
+        `
+        INSERT INTO practicas_asignaciones (
+          matricula_maquina_id,
+          fecha_inicio,
+          sesiones_totales,
+          sesiones_completadas,
+          estado
+        )
+        VALUES (
+          $1,
+          CURRENT_DATE,
+          $2,
+          0,
+          'PENDIENTE'
+        )
+        RETURNING *
+        `,
+        [maquina.matricula_maquina_id, sesionesTotales]
+      );
+
+      const asignacion = asignacionResult.rows[0];
+
+      // Generar sesiones programadas para la asignación
+      for (let s = 1; s <= sesionesTotales; s++) {
+        await client.query(
+          `
+          INSERT INTO practicas_sesiones (
+            asignacion_id,
+            numero_sesion,
+            fecha_programada,
+            duracion_minutos,
+            recuperada
+          )
+          VALUES ($1, $2, CURRENT_DATE, 30, false)
+          `,
+          [asignacion.id, s]
+        );
+      }
+
+      asignaciones.push(asignacion);
+    }
 
     if (esConexionPropia) await client.query('COMMIT');
-    
-    // 👈 Ahora sí existe 'asignaciones'
-    return asignaciones; 
+    return asignaciones;
 
   } catch (error) {
     if (esConexionPropia) await client.query('ROLLBACK');
