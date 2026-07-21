@@ -209,6 +209,31 @@ async function listarHistorialSesiones(req, res) {
     });
   }
 }
+
+async function obtenerLugaresPractica(req, res) {
+
+  try {
+
+    const data =
+      await practicasService.obtenerLugaresPractica();
+
+    res.json({
+      ok: true,
+      data
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+
+  }
+
+}
 async function validarPracticas(req, res) {
 
   try {
