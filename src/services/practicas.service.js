@@ -556,17 +556,20 @@ maq.nombre
 
   }
 
-  const sesion={
+const sesion = {
 
-    id:result.rows[0].id,
+    id: result.rows[0].id,
 
-    fecha:result.rows[0].fecha,
+    fecha: result.rows[0].fecha,
 
-    estado:result.rows[0].estado,
+    estado: result.rows[0].estado,
+
+    lugar_practica_id: Number(result.rows[0].lugar_practica_id),
+
+    lugar_practica: result.rows[0].lugar_practica,
 
     detalle:[]
-
-  };
+};
 
   result.rows.forEach(r=>{
 
