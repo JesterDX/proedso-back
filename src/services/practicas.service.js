@@ -495,6 +495,7 @@ async function obtenerSesionGrupal(id) {
   sg.id,
   sg.fecha,
   sg.estado,
+  sg.estado,
 
   d.id AS detalle_id,
   d.sesiones_asignadas,
@@ -532,6 +533,9 @@ ON a.id = m.alumno_id
 
 INNER JOIN maquinas maq
 ON maq.id = mm.maquina_id
+
+INNER JOIN lugares_practica lp
+ON lp.id = sg.lugar_practica_id
 
 WHERE sg.id = $1
 
