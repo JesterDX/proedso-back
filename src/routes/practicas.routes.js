@@ -30,7 +30,10 @@ router.get(
    '/alumnos-disponibles',
    practicasController.listarAlumnosDisponibles
 );
-
+router.get(
+  '/sesiones-grupales/historial',
+  practicasController.listarHistorialSesiones
+);
 router.post(
   '/sesion-grupal',
   practicasController.crearSesionGrupal
