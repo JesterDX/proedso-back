@@ -109,29 +109,39 @@ async function obtenerSesionGrupal(req,res){
 }
 
 async function guardarDetalleSesionController(req, res) {
-
   try {
-
     const id = Number(req.params.id);
 
-    const resultado =
-      await practicasService.guardarDetalleSesion(
-        id,
-        req.body
-      );
+    // Si viene desde FormData, req.body.detalles puede ser un string JSON
+    let detalles = req.body.detalles || req.body.detalle;
+    
+    if (typeof detalles === 'string') {
+      detalles = JSON.parse(detalles);
+    }
 
-    res.json(resultado);
+    const payload = {
+      detalle: detalles || [],
+      files: req.files // Por si manejas archivos desde multer
+    };
 
-  } catch (error) {
+    const resultado = await practicasService.guardarDetalleSesion(
+      id,
+      payload
+    );
 
-    res.status(500).json({
-      message: error.message
+    return res.json({
+      ok: true,
+      data: resultado
     });
 
+  } catch (error) {
+    console.error('Error en guardarDetalleSesionController:', error);
+    return res.status(500).json({
+      ok: false,
+      message: error.message
+    });
   }
-
 }
-
 
 // ==========================================
 // GUARDAR CRONOGRAMA
