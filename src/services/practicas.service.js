@@ -893,67 +893,54 @@ async function validarPracticas(matriculaId) {
 // ==========================================
 // CREAR ASIGNACIONES
 // ==========================================
-async function crearAsignacionPracticas(
-  matriculaId
-) {
-
-  const validacion =
-    await validarPracticas(matriculaId);
-
-  if (!validacion.puede_practicar) {
-
-    throw new Error(
-      'Alumno no habilitado para prácticas.'
-    );
-
-  }
-
-  // ==========================================
-  // OBTENER MÁQUINAS
-  // ==========================================
-  const maquinasResult = await pool.query(
-    `
-    SELECT
-      mm.id AS matricula_maquina_id,
-      mm.matricula_id,
-      mm.maquina_id,
-      maq.nombre AS maquina,
-      php.horas AS horas_practica -- 👈 1. Alias corregido para que coincida con tu JS abajo
-    FROM matricula_maquinas mm
-    INNER JOIN maquinas maq
-      ON maq.id = mm.maquina_id
-    INNER JOIN matriculas m
-      ON m.id = mm.matricula_id -- 👈 2. Traemos la matrícula para saber el curso exacto
-    LEFT JOIN plan_horas_practica php
-      ON php.maquina_id = mm.maquina_id
-     AND php.plan_curso_id = m.plan_curso_id -- 👈 3. ¡Corregido el "idhoras" y evitamos duplicados!
-    WHERE mm.matricula_id = $1
-    ORDER BY mm.id ASC
-    `,
-    [matriculaId]
-  );
-
-  if (!maquinasResult.rows.length) {
-
-    throw new Error(
-      'No existen máquinas asignadas.'
-    );
-
-  }
-
-  const client = await pool.connect();
+async function crearAsignacionPracticas(matriculaId, dbClient = null) {
+  // Si nos pasan un client activo usamos ese; si no, abrimos uno del pool
+  const client = dbClient || await pool.connect();
+  const esConexionPropia = !dbClient;
 
   try {
+    if (esConexionPropia) await client.query('BEGIN');
 
-    await client.query('BEGIN');
+    // Pasar 'client' a la validación para que vea los datos no comiteados aún
+    const validacion = await validarPracticas(matriculaId, client);
+
+    if (!validacion.puede_practicar) {
+      throw new Error('Alumno no habilitado para prácticas.');
+    }
+
+    // ==========================================
+    // OBTENER MÁQUINAS
+    // ==========================================
+    const maquinasResult = await client.query(
+      `
+      SELECT
+        mm.id AS matricula_maquina_id,
+        mm.matricula_id,
+        mm.maquina_id,
+        maq.nombre AS maquina,
+        php.horas AS horas_practica
+      FROM matricula_maquinas mm
+      INNER JOIN maquinas maq
+        ON maq.id = mm.maquina_id
+      INNER JOIN matriculas m
+        ON m.id = mm.matricula_id
+      LEFT JOIN plan_horas_practica php
+        ON php.maquina_id = mm.maquina_id
+       AND php.plan_curso_id = m.plan_curso_id
+      WHERE mm.matricula_id = $1
+      ORDER BY mm.id ASC
+      `,
+      [matriculaId]
+    );
+
+    if (!maquinasResult.rows.length) {
+      throw new Error('No existen máquinas asignadas.');
+    }
 
     const asignaciones = [];
 
     for (const maquina of maquinasResult.rows) {
-
-      // ==========================================
       // EVITAR DUPLICADOS
-      // ==========================================
       const existeResult = await client.query(
         `
         SELECT id
@@ -967,52 +954,35 @@ async function crearAsignacionPracticas(
         continue;
       }
 
-      const horas =
-        Number(maquina.horas_practica || 0);
+      const horas = Number(maquina.horas_practica || 0);
+      const sesionesTotales = horas * 2;
 
-      const sesionesTotales =
-        horas * 2;
-
-      // ==========================================
       // CREAR ASIGNACIÓN
-      // ==========================================
-      const asignacionResult =
-        await client.query(
-          `
-          INSERT INTO practicas_asignaciones (
-            matricula_maquina_id,
-            fecha_inicio,
-            sesiones_totales,
-            sesiones_completadas,
-            estado
-          )
-          VALUES (
-            $1,
-            CURRENT_DATE,
-            $2,
-            0,
-            'PENDIENTE'
-          )
-          RETURNING *
-          `,
-          [
-            maquina.matricula_maquina_id,
-            sesionesTotales
-          ]
-        );
+      const asignacionResult = await client.query(
+        `
+        INSERT INTO practicas_asignaciones (
+          matricula_maquina_id,
+          fecha_inicio,
+          sesiones_totales,
+          sesiones_completadas,
+          estado
+        )
+        VALUES (
+          $1,
+          CURRENT_DATE,
+          $2,
+          0,
+          'PENDIENTE'
+        )
+        RETURNING *
+        `,
+        [maquina.matricula_maquina_id, sesionesTotales]
+      );
 
-      const asignacion =
-        asignacionResult.rows[0];
+      const asignacion = asignacionResult.rows[0];
 
-      // ==========================================
       // GENERAR SESIONES
-      // ==========================================
-      for (
-        let s = 1;
-        s <= sesionesTotales;
-        s++
-      ) {
-
+      for (let s = 1; s <= sesionesTotales; s++) {
         await client.query(
           `
           INSERT INTO practicas_sesiones (
@@ -1022,44 +992,25 @@ async function crearAsignacionPracticas(
             duracion_minutos,
             recuperada
           )
-          VALUES (
-            $1,
-            $2,
-            CURRENT_DATE,
-            30,
-            false
-          )
+          VALUES ($1, $2, CURRENT_DATE, 30, false)
           `,
-          [
-            asignacion.id,
-            s
-          ]
+          [asignacion.id, s]
         );
-
       }
 
       asignaciones.push(asignacion);
-
     }
 
-    await client.query('COMMIT');
-
+    if (esConexionPropia) await client.query('COMMIT');
     return asignaciones;
 
   } catch (error) {
-
-    await client.query('ROLLBACK');
-
+    if (esConexionPropia) await client.query('ROLLBACK');
     throw error;
-
   } finally {
-
-    client.release();
-
+    if (esConexionPropia) client.release();
   }
-
 }
-
 // ==========================================
 // LISTAR ASIGNACIONES
 // ==========================================
