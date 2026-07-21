@@ -1,6 +1,6 @@
-const db = require('../config/db'); // Ajusta a tu ruta de conexión DB
+const db = require('../config/db');
 
-exports.getDashboardData = async () => {
+async function getDashboardData() {
   const [
     alumnosStats,
     maquinasStats,
@@ -64,4 +64,9 @@ exports.getDashboardData = async () => {
       demandaMaquinas: demandaMaquinas.rows || []
     }
   };
+}
+
+// ⚠️ IMPORTANTE: Exportar la función correctamente
+module.exports = {
+  getDashboardData
 };
