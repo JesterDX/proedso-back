@@ -462,7 +462,7 @@ async function insertarCuota(client, data) {
   return result.rows[0];
 }
 
-aasync function crearMatricula(data, user) {
+async function crearMatricula(data, user) {
   const client = await pool.connect();
 
   try {
