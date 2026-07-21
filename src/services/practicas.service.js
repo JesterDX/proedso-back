@@ -505,17 +505,29 @@ async function guardarDetalleSesion(id, data) {
 
     for (const item of data.detalle) {
 
+      // Obtener asistencia anterior para evitar duplicados
+      const anterior = await client.query(
+        `
+        SELECT asistencia
+        FROM practicas_sesiones_grupales_detalle
+        WHERE id = $1
+        `,
+        [item.detalle_id]
+      );
+
+      const asistenciaAnterior =
+        anterior.rows[0]?.asistencia;
+
+      // Actualizar detalle
       await client.query(
         `
         UPDATE practicas_sesiones_grupales_detalle
         SET
-
-            asistencia=$1,
-            observaciones=$2,
-            evidencia_url=$3,
-            fecha_registro=NOW()
-
-        WHERE id=$4
+            asistencia = $1,
+            observaciones = $2,
+            evidencia_url = $3,
+            fecha_registro = NOW()
+        WHERE id = $4
         `,
         [
           item.asistencia,
@@ -525,11 +537,52 @@ async function guardarDetalleSesion(id, data) {
         ]
       );
 
+      // Solo descontar una vez
+      if (
+        item.asistencia === "ASISTIO" &&
+        asistenciaAnterior !== "ASISTIO"
+      ) {
+
+        await client.query(
+          `
+          UPDATE matricula_maquinas
+          SET sesiones_completadas = sesiones_completadas + 1
+          WHERE id = $1
+          `,
+          [item.matricula_maquina_id]
+        );
+
+        // Si terminó todas las sesiones, completar máquina
+        await client.query(
+          `
+          UPDATE matricula_maquinas
+          SET estado = 'COMPLETADO'
+          WHERE id = $1
+            AND sesiones_completadas >= sesiones_totales
+          `,
+          [item.matricula_maquina_id]
+        );
+
+      }
+
     }
+
+    // Finalizar sesión grupal
+    await client.query(
+      `
+      UPDATE practicas_sesiones_grupales
+      SET estado = 'FINALIZADA'
+      WHERE id = $1
+      `,
+      [id]
+    );
 
     await client.query("COMMIT");
 
-    return { ok: true };
+    return {
+      ok: true,
+      message: "Práctica registrada correctamente."
+    };
 
   } catch (error) {
 
