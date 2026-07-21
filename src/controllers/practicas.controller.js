@@ -459,7 +459,7 @@ async function obtenerDetallePracticas(
   }
 
 }
-async function obtenerUltimaSesionPendiente(req,res){
+async function obtenerUltimaPendiente(req,res){
 
     try {
 
@@ -502,7 +502,7 @@ module.exports = {
   obtenerSesionGrupal,
   guardarDetalleSesionController,
   guardarCronograma,
-  obtenerUltimaSesionPendiente,
+  obtenerUltimaPendiente,
 
   
   validarPracticas,
