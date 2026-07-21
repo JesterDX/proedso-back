@@ -69,6 +69,28 @@ async function crearSesionGrupal(req, res) {
 
 }
 
+async function listarPendientes(req, res) {
+
+  try {
+
+    const data = await practicasService.listarSesionesPendientes();
+
+    res.json({
+      ok: true,
+      data
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+      ok: false,
+      message: error.message
+    });
+
+  }
+
+}
+
 
 async function obtenerSesionGrupal(req,res){
 
@@ -560,6 +582,8 @@ module.exports = {
   obtenerUltimaPendiente,
   listarHistorialSesiones,
   obtenerLugaresPractica,
+  listarPendientes,
+
   
   validarPracticas,
   listarMatriculasActivas,
