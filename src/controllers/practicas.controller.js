@@ -459,7 +459,42 @@ async function obtenerDetallePracticas(
   }
 
 }
+async function obtenerUltimaSesionPendiente(req,res){
 
+    try {
+
+
+        const sesion =
+        await practicasService.obtenerUltimaSesionPendiente();
+
+
+        res.json({
+
+            success:true,
+
+            data:sesion
+
+        });
+
+
+    }catch(error){
+
+
+        console.error(error);
+
+
+        res.status(500).json({
+
+            success:false,
+
+            message:'Error obteniendo sesión pendiente'
+
+        });
+
+
+    }
+
+}
 
 module.exports = {
   listarAlumnosDisponibles,
@@ -467,7 +502,7 @@ module.exports = {
   obtenerSesionGrupal,
   guardarDetalleSesionController,
   guardarCronograma,
-
+  obtenerUltimaSesionPendiente,
 
   
   validarPracticas,
