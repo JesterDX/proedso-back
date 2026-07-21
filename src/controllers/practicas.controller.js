@@ -131,6 +131,54 @@ async function guardarDetalleSesionController(req, res) {
   }
 
 }
+
+
+// ==========================================
+// GUARDAR CRONOGRAMA
+// ==========================================
+async function guardarCronograma(req, res) {
+
+  try {
+
+    const { id } = req.params;
+
+    const { detalle } = req.body;
+
+    await practicasService
+      .guardarCronograma(
+        id,
+        detalle
+      );
+
+    return res.json({
+
+      ok: true,
+
+      message:
+        'Cronograma guardado correctamente.'
+
+    });
+
+  } catch (error) {
+
+    console.error(
+      '❌ guardarCronograma:',
+      error
+    );
+
+    return res.status(500).json({
+
+      ok: false,
+
+      error:
+        error.message ||
+        'Error al guardar el cronograma.'
+
+    });
+
+  }
+
+}
 async function validarPracticas(req, res) {
 
   try {
@@ -418,7 +466,7 @@ module.exports = {
   crearSesionGrupal,
   obtenerSesionGrupal,
   guardarDetalleSesionController,
-
+  guardarCronograma,
 
 
   
