@@ -219,7 +219,7 @@ async function crearSesionGrupal(payload) {
 
     detalle,
 
-    lugarPraticaId
+    lugarPracticaId
 
   } = payload;
 
@@ -227,7 +227,7 @@ async function crearSesionGrupal(payload) {
     throw new Error("Debe indicar la fecha.");
   }
 
-  if (!lugarPraticaId) {
+  if (!lugarPracticaId) {
     throw new Error("Debe seleccionar el lugar de práctica.");
   }
 
@@ -269,22 +269,28 @@ async function crearSesionGrupal(payload) {
     const existe = await client.query(
 
       `
-      SELECT id
-
-      FROM practicas_sesiones_grupales
-
-      WHERE
-
-      fecha = $1
-
-      AND lugar_practica_id = $2
+        SELECT id
+        
+        FROM practicas_sesiones_grupales
+        
+        WHERE
+        
+        fecha=$1
+        
+        AND lugar_practica_id=$2
+        
+        AND estado IN
+        (
+        'PENDIENTE',
+        'EN_CURSO'
+        )
       `,
 
       [
 
         fecha,
 
-        lugarPraticaId
+        lugarPracticaId
 
       ]
 
@@ -404,7 +410,7 @@ async function crearSesionGrupal(payload) {
 
         fecha,
 
-        lugarPraticaId
+        lugarPracticaId
 
       ]
 
