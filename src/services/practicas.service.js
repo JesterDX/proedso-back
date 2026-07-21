@@ -772,6 +772,72 @@ async function obtenerUltimaPendiente() {
   return result.rows[0];
 
 }
+
+// ==========================================
+// LISTAR HISTORIAL DE SESIONES FINALIZADAS
+// ==========================================
+async function listarHistorialSesiones() {
+  const result = await pool.query(`
+    SELECT
+      sg.id AS sesion_id,
+      sg.fecha,
+      sg.estado,
+      sg.observaciones AS observaciones_sesion,
+      
+      d.id AS detalle_id,
+      d.orden,
+      d.hora_inicio,
+      d.hora_fin,
+      d.sesiones_asignadas,
+      d.asistencia,
+      d.observaciones,
+      d.evidencia_url,
+      
+      mm.id AS matricula_maquina_id,
+      maq.nombre AS maquina,
+      a.nombres || ' ' || a.apellidos AS alumno
+
+    FROM practicas_sesiones_grupales sg
+    INNER JOIN practicas_sesiones_grupales_detalle d ON d.sesion_grupal_id = sg.id
+    INNER JOIN matricula_maquinas mm ON mm.id = d.matricula_maquina_id
+    INNER JOIN matriculas m ON m.id = mm.matricula_id
+    INNER JOIN alumnos a ON a.id = m.alumno_id
+    INNER JOIN maquinas maq ON maq.id = mm.maquina_id
+
+    WHERE sg.estado = 'FINALIZADA'
+    ORDER BY sg.fecha DESC, d.orden ASC, alumno ASC
+  `);
+
+  // Agrupamos los resultados para que devuelva una lista de sesiones, cada una con su arreglo de alumnos/detalle
+  const sesionesMap = new Map();
+
+  result.rows.forEach(r => {
+    if (!sesionesMap.has(r.sesion_id)) {
+      sesionesMap.set(r.sesion_id, {
+        id: Number(r.sesion_id),
+        fecha: r.fecha,
+        estado: r.estado,
+        observaciones_sesion: r.observaciones_sesion,
+        detalle: []
+      });
+    }
+
+    sesionesMap.get(r.sesion_id).detalle.push({
+      detalle_id: Number(r.detalle_id),
+      orden: r.orden ? Number(r.orden) : null,
+      hora_inicio: r.hora_inicio,
+      hora_fin: r.hora_fin,
+      alumno: r.alumno,
+      maquina: r.maquina,
+      sesiones_asignadas: Number(r.sesiones_asignadas),
+      asistencia: r.asistencia,
+      observaciones: r.observaciones,
+      evidencia_url: r.evidencia_url
+    });
+  });
+
+  return Array.from(sesionesMap.values());
+}
 async function validarPracticas(matriculaId) {
 
   const matriculaResult = await pool.query(
@@ -1451,6 +1517,8 @@ module.exports = {
   guardarDetalleSesion,
   guardarCronograma,
   obtenerUltimaPendiente,
+  listarHistorialSesiones,
+
   
   validarPracticas,
   listarMatriculasActivas,
