@@ -213,7 +213,23 @@ async function listarAlumnosDisponibles(filtros = {}) {
 
 async function crearSesionGrupal(payload) {
 
-  const { fecha, detalle } = payload;
+  const {
+
+    fecha,
+
+    detalle,
+
+    lugarPraticaId
+
+  } = payload;
+
+  if (!fecha) {
+    throw new Error("Debe indicar la fecha.");
+  }
+
+  if (!lugarPraticaId) {
+    throw new Error("Debe seleccionar el lugar de práctica.");
+  }
 
   if (!detalle || detalle.length === 0) {
     throw new Error("No hay alumnos seleccionados.");
@@ -226,61 +242,128 @@ async function crearSesionGrupal(payload) {
     await client.query("BEGIN");
 
     //=========================================
-    // SOLO UNA SESIÓN ABIERTA
+    // VALIDAR FECHA
     //=========================================
 
-    const abierta = await client.query(`
-      SELECT id
-      FROM practicas_sesiones_grupales
-      WHERE estado IN ('PENDIENTE','EN_CURSO')
-      LIMIT 1
-    `);
+    const hoy = new Date();
 
-    if (abierta.rows.length > 0) {
-      throw new Error("Ya existe una sesión grupal pendiente.");
+    hoy.setHours(0,0,0,0);
+
+    const fechaSesion = new Date(fecha);
+
+    fechaSesion.setHours(0,0,0,0);
+
+    if (fechaSesion < hoy) {
+
+      throw new Error(
+        "No se pueden crear jornadas para fechas anteriores."
+      );
+
     }
 
     //=========================================
-    // VALIDAR CADA ALUMNO
+    // VALIDAR QUE NO EXISTA
+    // MISMA FECHA + MISMO LUGAR
+    //=========================================
+
+    const existe = await client.query(
+
+      `
+      SELECT id
+
+      FROM practicas_sesiones_grupales
+
+      WHERE
+
+      fecha = $1
+
+      AND lugar_practica_id = $2
+      `,
+
+      [
+
+        fecha,
+
+        lugarPraticaId
+
+      ]
+
+    );
+
+    if (existe.rows.length > 0) {
+
+      throw new Error(
+
+        "Ya existe una jornada registrada para ese lugar en esa fecha."
+
+      );
+
+    }
+
+    //=========================================
+    // VALIDAR SESIONES
     //=========================================
 
     for (const item of detalle) {
 
-      const validar = await client.query(`
+      const validar = await client.query(
+
+        `
         SELECT
 
-          mm.id,
+            mm.id,
 
-          pa.sesiones_totales,
+            pa.sesiones_totales,
 
-          pa.sesiones_completadas,
+            pa.sesiones_completadas,
 
-          (
-            pa.sesiones_totales -
-            pa.sesiones_completadas
-          ) AS sesiones_restantes
+            (
+
+                pa.sesiones_totales -
+
+                pa.sesiones_completadas
+
+            ) AS sesiones_restantes
 
         FROM matricula_maquinas mm
 
         INNER JOIN practicas_asignaciones pa
-          ON pa.matricula_maquina_id = mm.id
 
-        WHERE mm.id = $1
-      `,[item.matriculaMaquinaId]);
+        ON pa.matricula_maquina_id = mm.id
 
-      if(validar.rows.length===0){
+        WHERE mm.id=$1
+        `,
+
+        [
+
+          item.matriculaMaquinaId
+
+        ]
+
+      );
+
+      if (!validar.rows.length) {
+
         throw new Error(
+
           "No existe asignación de prácticas."
+
         );
+
       }
 
-      const restante =
-        Number(validar.rows[0].sesiones_restantes);
+      const restante = Number(
 
-      if(item.sesiones>restante){
+        validar.rows[0].sesiones_restantes
+
+      );
+
+      if (item.sesiones > restante) {
 
         throw new Error(
+
           `La máquina ${item.matriculaMaquinaId} solo tiene ${restante} sesiones restantes.`
+
         );
 
       }
@@ -291,63 +374,85 @@ async function crearSesionGrupal(payload) {
     // CREAR SESIÓN
     //=========================================
 
-    const sesion = await client.query(`
+    const sesion = await client.query(
+
+      `
       INSERT INTO practicas_sesiones_grupales(
 
-        fecha,
+          fecha,
 
-        estado
+          estado,
+
+          lugar_practica_id
 
       )
 
       VALUES(
 
-        $1,
+          $1,
 
-        'PENDIENTE'
+          'PENDIENTE',
+
+          $2
 
       )
 
       RETURNING *
-    `,[fecha]);
+      `,
+
+      [
+
+        fecha,
+
+        lugarPraticaId
+
+      ]
+
+    );
 
     const sesionGrupal = sesion.rows[0];
 
     //=========================================
-    // INSERTAR DETALLE
+    // DETALLE
     //=========================================
 
-    for(const item of detalle){
+    for (const item of detalle) {
 
-      await client.query(`
+      await client.query(
+
+        `
         INSERT INTO practicas_sesiones_grupales_detalle(
 
-          sesion_grupal_id,
+            sesion_grupal_id,
 
-          matricula_maquina_id,
+            matricula_maquina_id,
 
-          sesiones_asignadas
+            sesiones_asignadas
 
         )
 
         VALUES(
 
-          $1,
+            $1,
 
-          $2,
+            $2,
 
-          $3
+            $3
 
         )
-      `,[
+        `,
 
-        sesionGrupal.id,
+        [
 
-        item.matriculaMaquinaId,
+          sesionGrupal.id,
 
-        item.sesiones
+          item.matriculaMaquinaId,
 
-      ]);
+          item.sesiones
+
+        ]
+
+      );
 
     }
 
@@ -356,20 +461,15 @@ async function crearSesionGrupal(payload) {
     return sesionGrupal;
 
   }
-    catch (error) {
-    
-      await client.query("ROLLBACK");
-    
-      console.error("=================================");
-      console.error("ERROR crearSesionGrupal");
-      console.error(error);
-      console.error(error.message);
-      console.error(error.stack);
-      console.error("=================================");
-    
-      throw error;
-    
-    }
+
+  catch(error){
+
+    await client.query("ROLLBACK");
+
+    throw error;
+
+  }
+
   finally{
 
     client.release();
