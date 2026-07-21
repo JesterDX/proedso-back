@@ -505,7 +505,7 @@ async function guardarDetalleSesion(id, data) {
 
     for (const item of data.detalle) {
 
-      // Obtener asistencia anterior para evitar duplicados
+      // Obtener estado anterior
       const anterior = await client.query(
         `
         SELECT asistencia
@@ -523,21 +523,21 @@ async function guardarDetalleSesion(id, data) {
         `
         UPDATE practicas_sesiones_grupales_detalle
         SET
-            asistencia = $1,
-            observaciones = $2,
-            evidencia_url = $3,
-            fecha_registro = NOW()
+          asistencia = $1,
+          observaciones = $2,
+          evidencia_url = $3,
+          fecha_registro = NOW()
         WHERE id = $4
         `,
         [
           item.asistencia,
-          item.observaciones || null,
-          item.evidencia_url || null,
+          item.observaciones ?? null,
+          item.evidencia_url ?? null,
           item.detalle_id
         ]
       );
 
-      // Solo descontar una vez
+      // SOLO descontar una vez
       if (
         item.asistencia === "ASISTIO" &&
         asistenciaAnterior !== "ASISTIO"
@@ -552,13 +552,12 @@ async function guardarDetalleSesion(id, data) {
           [item.matricula_maquina_id]
         );
 
-        // Si terminó todas las sesiones, completar máquina
         await client.query(
           `
           UPDATE matricula_maquinas
-          SET estado = 'COMPLETADO'
-          WHERE id = $1
-            AND sesiones_completadas >= sesiones_totales
+          SET estado='COMPLETADO'
+          WHERE id=$1
+          AND sesiones_completadas>=sesiones_totales
           `,
           [item.matricula_maquina_id]
         );
@@ -567,12 +566,11 @@ async function guardarDetalleSesion(id, data) {
 
     }
 
-    // Finalizar sesión grupal
     await client.query(
       `
       UPDATE practicas_sesiones_grupales
-      SET estado = 'FINALIZADA'
-      WHERE id = $1
+      SET estado='FINALIZADA'
+      WHERE id=$1
       `,
       [id]
     );
@@ -596,7 +594,6 @@ async function guardarDetalleSesion(id, data) {
   }
 
 }
-
 async function validarPracticas(matriculaId) {
 
   const matriculaResult = await pool.query(
