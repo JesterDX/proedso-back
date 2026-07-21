@@ -16,6 +16,11 @@ router.get(
   "/lugares-practica",
   practicasController.obtenerLugaresPractica
 );
+
+router.get(
+  '/pendientes',
+  practicasController.listarPendientes
+);
 // ==========================================
 // SESIONES GRUPALES (ESTÁTICAS PRIMERO)
 // ==========================================
@@ -35,6 +40,8 @@ router.put(
   uploadEvidencias.any(), 
   practicasController.guardarDetalleSesionController
 );
+
+
 
 router.put("/sesiones-grupales/:id/cronograma", practicasController.guardarCronograma);
 
