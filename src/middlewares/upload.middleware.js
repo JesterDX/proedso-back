@@ -1,23 +1,28 @@
 const multer = require('multer');
+const { storageDocumentos } = require('../config/cloudinary');
 
-// Almacena los archivos en la memoria RAM como Buffer
-const storage = multer.memoryStorage();
-
-// Filtro opcional para aceptar solo imágenes
-const imageFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image/')) {
-    cb(null, true);
-  } else {
-    cb(new Error('Solo se permiten archivos de imagen.'), false);
-  }
-};
-
-const upload = multer({
-  storage: storage,
+// Configuración de Multer usando el storage de Cloudinary
+const uploadEvidencias = multer({
+  storage: storageDocumentos,
   limits: {
-    fileSize: 5 * 1024 * 1024 // Límite de 5 MB por archivo
+    fileSize: 10 * 1024 * 1024 // Límite máximo de 10 MB por archivo
   },
-  fileFilter: imageFilter
+  fileFilter: (req, file, cb) => {
+    // Permite imágenes y documentos PDF/Word
+    if (
+      file.mimetype.startsWith('image/') ||
+      file.mimetype === 'application/pdf' ||
+      file.mimetype === 'application/msword' ||
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error('Tipo de archivo no permitido. Sube una imagen o documento.'), false);
+    }
+  }
 });
 
-module.exports = upload;
+// Exportación compatible: exporta la instancia por defecto y también como propiedad
+module.exports = uploadEvidencias;
+module.exports.uploadEvidencias = uploadEvidencias;
+module.exports.uploadPago = uploadEvidencias;
