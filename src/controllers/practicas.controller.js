@@ -559,7 +559,7 @@ module.exports = {
   guardarCronograma,
   obtenerUltimaPendiente,
   listarHistorialSesiones,
-
+  obtenerLugaresPractica,
   
   validarPracticas,
   listarMatriculasActivas,
