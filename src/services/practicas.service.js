@@ -852,6 +852,27 @@ async function listarHistorialSesiones() {
 
   return Array.from(sesionesMap.values());
 }
+
+async function obtenerLugaresPractica(){
+
+    const result = await pool.query(
+
+        `
+        SELECT
+            id,
+            nombre
+
+        FROM lugares_practica
+
+        WHERE activo=TRUE
+
+        ORDER BY nombre
+        `
+    );
+
+    return result.rows;
+
+}
 // 1. Modifica la firma y las consultas dentro de validarPracticas
 async function validarPracticas(matriculaId, dbClient = null) {
   const client = dbClient || pool; // Usa el client de la transacción si viene informado
@@ -1440,7 +1461,7 @@ module.exports = {
   guardarCronograma,
   obtenerUltimaPendiente,
   listarHistorialSesiones,
-
+  obtenerLugaresPractica,
   
   validarPracticas,
   listarMatriculasActivas,
