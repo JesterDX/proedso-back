@@ -112,16 +112,22 @@ async function guardarDetalleSesionController(req, res) {
   try {
     const id = Number(req.params.id);
 
-    // Si viene desde FormData, req.body.detalles puede ser un string JSON
-    let detalles = req.body.detalles || req.body.detalle;
-    
+    // Acceso seguro por si req.body viene undefined
+    const bodyData = req.body || {};
+    let detalles = bodyData.detalles || bodyData.detalle || bodyData;
+
+    // Si detalles viene como string JSON (común con FormData)
     if (typeof detalles === 'string') {
-      detalles = JSON.parse(detalles);
+      try {
+        detalles = JSON.parse(detalles);
+      } catch (e) {
+        detalles = [];
+      }
     }
 
     const payload = {
-      detalle: detalles || [],
-      files: req.files // Por si manejas archivos desde multer
+      detalle: Array.isArray(detalles) ? detalles : [],
+      files: req.files || req.file
     };
 
     const resultado = await practicasService.guardarDetalleSesion(
@@ -129,10 +135,7 @@ async function guardarDetalleSesionController(req, res) {
       payload
     );
 
-    return res.json({
-      ok: true,
-      data: resultado
-    });
+    return res.json(resultado);
 
   } catch (error) {
     console.error('Error en guardarDetalleSesionController:', error);
@@ -142,7 +145,6 @@ async function guardarDetalleSesionController(req, res) {
     });
   }
 }
-
 // ==========================================
 // GUARDAR CRONOGRAMA
 // ==========================================
