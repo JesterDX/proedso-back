@@ -12,7 +12,10 @@ router.get('/validar/:matriculaId', practicasController.validarPracticas);
 router.get('/activas', practicasController.listarMatriculasActivas);
 router.get('/ordenadas', practicasController.listarPracticasOrdenadas);
 router.get('/alumnos-disponibles', practicasController.listarAlumnosDisponibles);
-
+router.get(
+  "/lugares-practica",
+  practicasController.obtenerLugaresPractica
+);
 // ==========================================
 // SESIONES GRUPALES (ESTÁTICAS PRIMERO)
 // ==========================================
