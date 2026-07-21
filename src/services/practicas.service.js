@@ -658,6 +658,88 @@ async function guardarDetalleSesion(id, data) {
   }
 
 }
+
+// ==========================================
+// GUARDAR CRONOGRAMA
+// ==========================================
+async function guardarCronograma(
+  sesionGrupalId,
+  detalle
+) {
+
+  const client =
+    await pool.connect();
+
+  try {
+
+    await client.query(
+      'BEGIN'
+    );
+
+    for (const item of detalle) {
+
+      await client.query(
+
+        `
+        UPDATE practicas_sesiones_grupales_detalle
+        SET
+
+          orden = $1,
+
+          hora_inicio = $2,
+
+          hora_fin = $3
+
+        WHERE
+
+          id = $4
+
+          AND sesion_grupal_id = $5
+        `,
+
+        [
+
+          item.orden,
+
+          item.horaInicio,
+
+          item.horaFin,
+
+          item.detalleId,
+
+          sesionGrupalId
+
+        ]
+
+      );
+
+    }
+
+    await client.query(
+      'COMMIT'
+    );
+
+    return {
+
+      ok: true
+
+    };
+
+  } catch (error) {
+
+    await client.query(
+      'ROLLBACK'
+    );
+
+    throw error;
+
+  } finally {
+
+    client.release();
+
+  }
+
+}
 async function validarPracticas(matriculaId) {
 
   const matriculaResult = await pool.query(
@@ -1335,7 +1417,7 @@ module.exports = {
   crearSesionGrupal,
   obtenerSesionGrupal,
   guardarDetalleSesion,
-
+  guardarCronograma,
   
   validarPracticas,
   listarMatriculasActivas,
