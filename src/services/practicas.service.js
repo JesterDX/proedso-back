@@ -495,7 +495,6 @@ async function obtenerSesionGrupal(id) {
   sg.id,
   sg.fecha,
   sg.estado,
-  sg.estado,
 
   d.id AS detalle_id,
   d.sesiones_asignadas,
@@ -906,6 +905,7 @@ async function listarHistorialSesiones() {
       sg.id AS sesion_id,
       sg.fecha,
       sg.estado,
+      lp.nombre AS lugar_practica,
       sg.observaciones AS observaciones_sesion,
       
       d.id AS detalle_id,
@@ -927,6 +927,8 @@ async function listarHistorialSesiones() {
     INNER JOIN matriculas m ON m.id = mm.matricula_id
     INNER JOIN alumnos a ON a.id = m.alumno_id
     INNER JOIN maquinas maq ON maq.id = mm.maquina_id
+    INNER JOIN lugares_practica lp
+    ON lp.id = sg.lugar_practica_id
 
     WHERE sg.estado = 'FINALIZADA'
     ORDER BY sg.fecha DESC, d.orden ASC, alumno ASC
@@ -938,11 +940,14 @@ async function listarHistorialSesiones() {
   result.rows.forEach(r => {
     if (!sesionesMap.has(r.sesion_id)) {
       sesionesMap.set(r.sesion_id, {
-        id: Number(r.sesion_id),
-        fecha: r.fecha,
-        estado: r.estado,
-        observaciones_sesion: r.observaciones_sesion,
-        detalle: []
+          id: Number(r.sesion_id),
+          fecha: r.fecha,
+          estado: r.estado,
+      
+          lugar_practica: r.lugar_practica,
+      
+          observaciones_sesion: r.observaciones_sesion,
+          detalle:[]
       });
     }
 
