@@ -503,60 +503,118 @@ async function guardarDetalleSesion(id, data) {
 
     await client.query("BEGIN");
 
+    console.log("========== GUARDAR DETALLE ==========");
+    console.log("Sesion:", id);
+    console.log(JSON.stringify(data, null, 2));
+
     for (const item of data.detalle) {
 
-      // Obtener estado anterior
+      console.log("Procesando detalle:", item.detalle_id);
+
+      // Estado anterior
       const anterior = await client.query(
         `
         SELECT asistencia
         FROM practicas_sesiones_grupales_detalle
-        WHERE id = $1
+        WHERE id=$1
         `,
         [item.detalle_id]
       );
 
       const asistenciaAnterior =
-        anterior.rows[0]?.asistencia;
+        anterior.rows[0]?.asistencia ?? null;
 
-      // Actualizar detalle
+      console.log(
+        "Anterior:",
+        asistenciaAnterior,
+        "Nueva:",
+        item.asistencia
+      );
+
+      // Guardar detalle
       await client.query(
         `
         UPDATE practicas_sesiones_grupales_detalle
         SET
-          asistencia = $1,
-          observaciones = $2,
-          evidencia_url = $3,
-          fecha_registro = NOW()
-        WHERE id = $4
+            asistencia=$1,
+            observaciones=$2,
+            evidencia_url=$3,
+            fecha_registro=NOW()
+        WHERE id=$4
         `,
         [
           item.asistencia,
-          item.observaciones ?? null,
-          item.evidencia_url ?? null,
+          item.observaciones || null,
+          item.evidencia_url || null,
           item.detalle_id
         ]
       );
 
-      // SOLO descontar una vez
+      console.log("Detalle actualizado.");
+
+      // Solo descontar una vez
       if (
         item.asistencia === "ASISTIO" &&
         asistenciaAnterior !== "ASISTIO"
       ) {
 
-        await client.query(
+        console.log(">>> DESCONTANDO SESIÓN");
+
+        // matricula_maquinas
+        const r1 = await client.query(
           `
           UPDATE matricula_maquinas
-          SET sesiones_completadas = sesiones_completadas + 1
-          WHERE id = $1
+          SET sesiones_completadas = sesiones_completadas + $2
+          WHERE id=$1
+          RETURNING *
           `,
-          [item.matricula_maquina_id]
+          [
+            item.matricula_maquina_id,
+            item.sesiones_asignadas
+          ]
         );
 
+        console.log(
+          "matricula_maquinas:",
+          r1.rows
+        );
+
+        // practicas_asignaciones
+        const r2 = await client.query(
+          `
+          UPDATE practicas_asignaciones
+          SET sesiones_completadas = sesiones_completadas + $2
+          WHERE matricula_maquina_id=$1
+          RETURNING *
+          `,
+          [
+            item.matricula_maquina_id,
+            item.sesiones_asignadas
+          ]
+        );
+
+        console.log(
+          "practicas_asignaciones:",
+          r2.rows
+        );
+
+        // Completar máquina
         await client.query(
           `
           UPDATE matricula_maquinas
           SET estado='COMPLETADO'
           WHERE id=$1
+          AND sesiones_completadas>=sesiones_totales
+          `,
+          [item.matricula_maquina_id]
+        );
+
+        // Completar asignación
+        await client.query(
+          `
+          UPDATE practicas_asignaciones
+          SET estado='COMPLETADO'
+          WHERE matricula_maquina_id=$1
           AND sesiones_completadas>=sesiones_totales
           `,
           [item.matricula_maquina_id]
@@ -577,6 +635,8 @@ async function guardarDetalleSesion(id, data) {
 
     await client.query("COMMIT");
 
+    console.log("COMMIT OK");
+
     return {
       ok: true,
       message: "Práctica registrada correctamente."
@@ -585,6 +645,10 @@ async function guardarDetalleSesion(id, data) {
   } catch (error) {
 
     await client.query("ROLLBACK");
+
+    console.error("ERROR guardarDetalleSesion");
+    console.error(error);
+
     throw error;
 
   } finally {
