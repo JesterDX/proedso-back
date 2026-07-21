@@ -462,7 +462,7 @@ async function insertarCuota(client, data) {
   return result.rows[0];
 }
 
-async function crearMatricula(data, user) {
+aasync function crearMatricula(data, user) {
   const client = await pool.connect();
 
   try {
@@ -601,8 +601,8 @@ async function crearMatricula(data, user) {
       [matriculaId]
     );
 
-    // 👈 Llamada corregida a la función importada
-    await crearAsignacionPracticas(matriculaId);
+    // 👈 LE PASAMOS EL CLIENTE ACTUAL
+    await crearAsignacionPracticas(matriculaId, client);
 
     const planPrecio = await obtenerPlanPrecioVigente(
       client,
