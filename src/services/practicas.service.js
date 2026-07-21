@@ -868,6 +868,30 @@ async function guardarCronograma(
   }
 
 }
+async function listarSesionesPendientes() {
+
+  const result = await pool.query(`
+    SELECT
+      sg.id,
+      sg.fecha,
+      sg.estado,
+      lp.nombre AS lugar_practica
+
+    FROM practicas_sesiones_grupales sg
+
+    INNER JOIN lugares_practica lp
+      ON lp.id = sg.lugar_practica_id
+
+    WHERE sg.estado = 'PENDIENTE'
+
+    ORDER BY
+      sg.fecha ASC,
+      sg.id ASC
+  `);
+
+  return result.rows;
+
+}
 
 // Ejemplo en tu backend (controller.js)
 async function obtenerUltimaPendiente() {
@@ -1580,6 +1604,7 @@ module.exports = {
   obtenerUltimaPendiente,
   listarHistorialSesiones,
   obtenerLugaresPractica,
+  listarSesionesPendientes,
   
   validarPracticas,
   listarMatriculasActivas,
