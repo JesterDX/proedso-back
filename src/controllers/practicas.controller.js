@@ -465,7 +465,7 @@ async function obtenerUltimaPendiente(req,res){
 
 
         const sesion =
-        await practicasService.obtenerUltimaSesionPendiente();
+        await practicasService.obtenerUltimaPendiente();
 
 
         res.json({
