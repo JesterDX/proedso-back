@@ -496,20 +496,52 @@ maq.nombre
 }
 
 async function guardarDetalleSesion(id, data) {
-
   const client = await pool.connect();
 
   try {
-
     await client.query("BEGIN");
 
     console.log("========== GUARDAR DETALLE ==========");
     console.log("Sesion:", id);
     console.log(JSON.stringify(data, null, 2));
 
-    for (const item of data.detalle) {
+    // 1. EXTRAER Y NORMALIZAR LOS DATOS DEL DETALLE
+    let listaDetalle = [];
 
-      console.log("Procesando detalle:", item.detalle_id);
+    // Si data llega como string (ej. JSON sin parsear desde req.body)
+    if (typeof data === "string") {
+      try {
+        const parsed = JSON.parse(data);
+        listaDetalle = parsed.detalle || parsed.detalles || (Array.isArray(parsed) ? parsed : []);
+      } catch (e) {
+        listaDetalle = [];
+      }
+    } 
+    // Si data es un objeto pero trae "detalles" (string JSON desde FormData)
+    else if (data && typeof data.detalles === "string") {
+      try {
+        listaDetalle = JSON.parse(data.detalles);
+      } catch (e) {
+        listaDetalle = [];
+      }
+    } 
+    // Si data trae "detalle" o "detalles" como Array
+    else if (data && (Array.isArray(data.detalle) || Array.isArray(data.detalles))) {
+      listaDetalle = data.detalle || data.detalles;
+    }
+    // Si data ya es un Array directamente
+    else if (Array.isArray(data)) {
+      listaDetalle = data;
+    }
+
+    // 2. ITERAR SOBRE LA LISTA NORMALIZADA
+    for (const item of listaDetalle) {
+      // Normalizar identificadores por si cambian de camelCase a snake_case
+      const detalleId = item.detalle_id || item.detalleId || item.id;
+      const matriculaMaquinaId = item.matricula_maquina_id || item.matriculaMaquinaId;
+      const sesionesAsignadas = item.sesiones_asignadas || item.sesionesAsignadas || 1;
+
+      console.log("Procesando detalle ID:", detalleId);
 
       // Estado anterior
       const anterior = await client.query(
@@ -518,11 +550,10 @@ async function guardarDetalleSesion(id, data) {
         FROM practicas_sesiones_grupales_detalle
         WHERE id=$1
         `,
-        [item.detalle_id]
+        [detalleId]
       );
 
-      const asistenciaAnterior =
-        anterior.rows[0]?.asistencia ?? null;
+      const asistenciaAnterior = anterior.rows[0]?.asistencia ?? null;
 
       console.log(
         "Anterior:",
@@ -545,8 +576,8 @@ async function guardarDetalleSesion(id, data) {
         [
           item.asistencia,
           item.observaciones || null,
-          item.evidencia_url || null,
-          item.detalle_id
+          item.evidencia_url || item.evidenciaUrl || null,
+          detalleId
         ]
       );
 
@@ -557,7 +588,6 @@ async function guardarDetalleSesion(id, data) {
         item.asistencia === "ASISTIO" &&
         asistenciaAnterior !== "ASISTIO"
       ) {
-
         console.log(">>> DESCONTANDO SESIÓN");
 
         // matricula_maquinas
@@ -569,15 +599,12 @@ async function guardarDetalleSesion(id, data) {
           RETURNING *
           `,
           [
-            item.matricula_maquina_id,
-            item.sesiones_asignadas
+            matriculaMaquinaId,
+            sesionesAsignadas
           ]
         );
 
-        console.log(
-          "matricula_maquinas:",
-          r1.rows
-        );
+        console.log("matricula_maquinas:", r1.rows);
 
         // practicas_asignaciones
         const r2 = await client.query(
@@ -588,15 +615,12 @@ async function guardarDetalleSesion(id, data) {
           RETURNING *
           `,
           [
-            item.matricula_maquina_id,
-            item.sesiones_asignadas
+            matriculaMaquinaId,
+            sesionesAsignadas
           ]
         );
 
-        console.log(
-          "practicas_asignaciones:",
-          r2.rows
-        );
+        console.log("practicas_asignaciones:", r2.rows);
 
         // Completar máquina
         await client.query(
@@ -606,7 +630,7 @@ async function guardarDetalleSesion(id, data) {
           WHERE id=$1
           AND sesiones_completadas>=sesiones_totales
           `,
-          [item.matricula_maquina_id]
+          [matriculaMaquinaId]
         );
 
         // Completar asignación
@@ -617,11 +641,9 @@ async function guardarDetalleSesion(id, data) {
           WHERE matricula_maquina_id=$1
           AND sesiones_completadas>=sesiones_totales
           `,
-          [item.matricula_maquina_id]
+          [matriculaMaquinaId]
         );
-
       }
-
     }
 
     await client.query(
@@ -643,20 +665,12 @@ async function guardarDetalleSesion(id, data) {
     };
 
   } catch (error) {
-
     await client.query("ROLLBACK");
-
-    console.error("ERROR guardarDetalleSesion");
-    console.error(error);
-
+    console.error("ERROR guardarDetalleSesion:", error);
     throw error;
-
   } finally {
-
     client.release();
-
   }
-
 }
 
 // ==========================================
