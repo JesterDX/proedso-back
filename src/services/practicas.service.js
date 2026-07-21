@@ -1335,6 +1335,8 @@ module.exports = {
   crearSesionGrupal,
   obtenerSesionGrupal,
   guardarDetalleSesion,
+
+  
   validarPracticas,
   listarMatriculasActivas,
   listarPracticasOrdenadas,
