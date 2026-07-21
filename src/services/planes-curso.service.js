@@ -128,6 +128,90 @@ async function listarPlanesCursoActivos() {
   return result.rows;
 }
 
+
+async function crearPlanCursoCompleto(data) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // 1. Insertar el plan de curso
+    const queryPlan = `
+      INSERT INTO planes_curso (
+        codigo,
+        nombre,
+        version,
+        tipo_curso_id,
+        permite_eleccion_personalizada,
+        vigente_desde,
+        vigente_hasta,
+        activo,
+        observaciones
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8)
+      RETURNING *;
+    `;
+
+    const valuesPlan = [
+      data.codigo,
+      data.nombre,
+      data.version,
+      data.tipo_curso_id,
+      data.permite_eleccion_personalizada,
+      data.vigente_desde,
+      data.vigente_hasta,
+      data.observaciones
+    ];
+
+    const resultPlan = await client.query(queryPlan, valuesPlan);
+    const nuevoPlan = resultPlan.rows[0];
+
+    // 2. Insertar la configuración de máquinas si vienen en el payload
+    if (data.maquinas && Array.isArray(data.maquinas)) {
+      for (const m of data.maquinas) {
+        if (!m.seleccionada) continue;
+
+        await client.query(
+          `
+          INSERT INTO plan_maquinas (
+            plan_curso_id,
+            maquina_id,
+            obligatoria,
+            es_regalo,
+            orden
+          )
+          VALUES ($1, $2, $3, $4, $5)
+          `,
+          [nuevoPlan.id, m.id, m.obligatoria, m.es_regalo, m.orden]
+        );
+
+        await client.query(
+          `
+          INSERT INTO plan_horas_practica (
+            plan_curso_id,
+            maquina_id,
+            horas,
+            sesiones_totales
+          )
+          VALUES ($1, $2, $3, $4)
+          `,
+          [nuevoPlan.id, m.id, m.horas, m.sesiones_totales]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+
+    return nuevoPlan;
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function actualizarPlanCurso(id, data) {
 
   const query = `
@@ -411,6 +495,7 @@ module.exports = {
   listarPlanesCursoActivos,
   crearPlanCurso,
   actualizarPlanCurso,
+  crearPlanCursoCompleto,
   cambiarEstadoPlanCurso,
   obtenerPlanCursoPorId,
   obtenerMaquinasPlan,
