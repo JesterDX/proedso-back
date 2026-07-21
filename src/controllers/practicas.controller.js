@@ -179,6 +179,24 @@ async function guardarCronograma(req, res) {
   }
 
 }
+
+
+async function listarHistorialSesiones(req, res) {
+  try {
+    const data = await practicasService.listarHistorialSesiones();
+
+    return res.json({
+      ok: true,
+      data
+    });
+  } catch (error) {
+    console.error('❌ listarHistorialSesiones:', error);
+    return res.status(500).json({
+      ok: false,
+      error: error.message || 'Error al obtener el historial de sesiones.'
+    });
+  }
+}
 async function validarPracticas(req, res) {
 
   try {
@@ -503,6 +521,7 @@ module.exports = {
   guardarDetalleSesionController,
   guardarCronograma,
   obtenerUltimaPendiente,
+  listarHistorialSesiones,
 
   
   validarPracticas,
