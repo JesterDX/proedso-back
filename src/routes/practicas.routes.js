@@ -35,6 +35,7 @@ router.post(
   '/sesion-grupal',
   practicasController.crearSesionGrupal
 );
+router.get('/sesion-grupal/ultima-pendiente', obtenerUltimaPendiente);
 router.get(
 
   "/sesion-grupal/:id",
@@ -42,6 +43,7 @@ router.get(
   practicasController.obtenerSesionGrupal
 
 );
+
 router.put(
   "/sesion-grupal/:id",
   practicasController.guardarDetalleSesionController
