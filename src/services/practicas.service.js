@@ -742,7 +742,7 @@ async function guardarCronograma(
 }
 
 // Ejemplo en tu backend (controller.js)
-async function obtenerUltimaSesionPendiente() {
+async function obtenerUltimaPendiente() {
 
   const result = await pool.query(
     `
