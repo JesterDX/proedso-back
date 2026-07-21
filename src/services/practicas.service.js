@@ -856,20 +856,30 @@ async function validarPracticas(matriculaId, dbClient = null) {
 }
 
 // 2. Modifica crearAsignacionPracticas para pasar dbClient a validarPracticas
-async function crearAsignacionPracticas(matriculaId, dbClient = null) {
+sync function crearAsignacionPracticas(matriculaId, dbClient = null) {
   const client = dbClient || await pool.connect();
   const esConexionPropia = !dbClient;
 
   try {
     if (esConexionPropia) await client.query('BEGIN');
 
-    // 👈 AQUÍ: Pasa 'client' a la validación
+    // 1. Validar la matrícula
     const validacion = await validarPracticas(matriculaId, client);
 
-    // ... resto de crearAsignacionPracticas ...
+    // 2. Crear las asignaciones de prácticas usando el client
+    const res = await client.query(
+      `INSERT INTO asignaciones_practicas (matricula_id, ...) VALUES ($1, ...) RETURNING *`,
+      [matriculaId]
+    );
+
+    // 👈 Declaras la variable aquí con los datos que insertaste
+    const asignaciones = res.rows; 
 
     if (esConexionPropia) await client.query('COMMIT');
-    return asignaciones;
+    
+    // 👈 Ahora sí existe 'asignaciones'
+    return asignaciones; 
+
   } catch (error) {
     if (esConexionPropia) await client.query('ROLLBACK');
     throw error;
