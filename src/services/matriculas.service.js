@@ -1,5 +1,5 @@
 const pool = require('../config/db');
-
+const { crearAsignacionPracticas } = require('./practicas.service');
 async function listarMatriculas(filtros = {}) {
   const { estado = null, search = '', anio = null, mes = null } = filtros;
 
@@ -497,7 +497,7 @@ async function crearMatricula(data, user) {
     );
 
     const nuevaMatricula = matriculaResult.rows[0];
-    const matriculaId = nuevaMatricula.id; // 👈 CORRECCIÓN: Definir matriculaId
+    const matriculaId = nuevaMatricula.id;
 
     await registrarHistorial(client, {
       matricula_id: matriculaId,
@@ -601,11 +601,8 @@ async function crearMatricula(data, user) {
       [matriculaId]
     );
 
-    await generarAsignacionesPracticas(
-      client,
-      matriculaId,
-      data.plan_curso_id
-    );
+    // 👈 Llamada corregida a la función importada
+    await crearAsignacionPracticas(matriculaId);
 
     const planPrecio = await obtenerPlanPrecioVigente(
       client,
@@ -999,13 +996,10 @@ async function regenerarTodo(client, matriculaId, data) {
   }
 
   // =========================================================
-  // 💥 CORRECCIÓN AQUÍ: REGENERAR ASIGNACIONES DE PRÁCTICAS
+  // REGENERAR ASIGNACIONES DE PRÁCTICAS
   // =========================================================
-  await generarAsignacionesPracticas(
-    client,
-    matriculaId,
-    data.plan_curso_id
-  );
+  // 👈 Llamada corregida a la función importada
+  await crearAsignacionPracticas(matriculaId);
 
   const planPrecio = await obtenerPlanPrecioVigente(
     client,
