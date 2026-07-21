@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const practicasController = require('../controllers/practicas.controller');
 
+// 1. IMPORTAR EL MIDDLEWARE DE NUBE / ARCHIVOS
+const uploadEvidencias = require('../middlewares/upload.middleware');
+
 // ==========================================
 // VALIDACIONES Y MATRÍCULAS
 // ==========================================
@@ -14,7 +17,7 @@ router.get('/alumnos-disponibles', practicasController.listarAlumnosDisponibles)
 // SESIONES GRUPALES (ESTÁTICAS PRIMERO)
 // ==========================================
 router.get('/sesiones-grupales/historial', practicasController.listarHistorialSesiones);
-router.get('/sesion-grupal/ultima-pendiente', practicasController.obtenerUltimaPendiente); // 👈 Puesta antes del :id
+router.get('/sesion-grupal/ultima-pendiente', practicasController.obtenerUltimaPendiente);
 
 router.post('/sesion-grupal', practicasController.crearSesionGrupal);
 
@@ -22,7 +25,14 @@ router.post('/sesion-grupal', practicasController.crearSesionGrupal);
 // SESIONES GRUPALES (PARÁMETROS DINÁMICOS)
 // ==========================================
 router.get("/sesion-grupal/:id", practicasController.obtenerSesionGrupal);
-router.put("/sesion-grupal/:id", practicasController.guardarDetalleSesionController);
+
+// 2. AGREGAR uploadEvidencias.any() AQUÍ PARA PROCESAR EL FormData Y FOTOS
+router.put(
+  "/sesion-grupal/:id", 
+  uploadEvidencias.any(), 
+  practicasController.guardarDetalleSesionController
+);
+
 router.put("/sesiones-grupales/:id/cronograma", practicasController.guardarCronograma);
 
 // ==========================================
