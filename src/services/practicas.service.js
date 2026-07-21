@@ -740,6 +740,29 @@ async function guardarCronograma(
   }
 
 }
+
+// Ejemplo en tu backend (controller.js)
+async function obtenerUltimaPendiente(req, res) {
+  try {
+    const query = `
+      SELECT id 
+      FROM sesiones_grupales 
+      WHERE estado = 'PENDIENTE' 
+      ORDER BY id DESC 
+      LIMIT 1;
+    `;
+    const resultado = await pool.query(query); // O tu cliente de base de datos
+
+    if (resultado.rows.length === 0) {
+      return res.json({ success: true, data: null });
+    }
+
+    res.json({ success: true, data: resultado.rows[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener la última sesión pendiente' });
+  }
+}
 async function validarPracticas(matriculaId) {
 
   const matriculaResult = await pool.query(
@@ -1418,6 +1441,7 @@ module.exports = {
   obtenerSesionGrupal,
   guardarDetalleSesion,
   guardarCronograma,
+  obtenerUltimaPendiente,
   
   validarPracticas,
   listarMatriculasActivas,
