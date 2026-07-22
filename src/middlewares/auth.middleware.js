@@ -15,7 +15,7 @@ const authMiddleware = (req, res, next) => {
       process.env.JWT_SECRET || 'LLAVE_SECRETA_SUPER_PROEDSO_2026'
     );
 
-    req.user = decoded; // 🔥 usuario real
+    req.user = decoded;
 
     next();
   } catch (error) {
