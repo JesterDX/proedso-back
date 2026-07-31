@@ -15,7 +15,8 @@ const auditoriaRoutes = require('./routes/auditoria.routes');
 const authRoutes = require('./routes/auth.routes'); 
 const dashboardRoutes = require('./routes/dashboard.routes'); 
 const tiposCursoRoutes = require('./routes/tipos-curso.routes');
-
+const homologacionesRoutes =
+require('./routes/homologaciones.routes');
 const app = express();
 
 app.disable('etag');
@@ -76,7 +77,13 @@ app.use('/api/maquinas', maquinasRoutes);
 app.use('/api/adjuntos', adjuntosRoutes);
 app.use('/api/pagos', pagosRoutes);
 app.use('/api/practicas', practicasRoutes);
+app.use(
 
+    '/api/homologaciones',
+
+    homologacionesRoutes
+
+);
 const PORT = process.env.PORT || 4000;
 
 app.listen(PORT, () => {
