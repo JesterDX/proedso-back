@@ -1,6 +1,29 @@
 const service =
 require('../services/homologaciones-service');
 
+
+async function importarSheets(req, res) {
+
+    try {
+
+        const data = await service.importarDesdeSheets();
+
+        res.json({
+            ok: true,
+            ...data
+        });
+
+    } catch (error) {
+
+        res.status(500).json({
+            ok: false,
+            message: error.message
+        });
+
+    }
+
+}
+
 async function listar(req,res){
 
     try{
@@ -702,6 +725,8 @@ async function eliminar(req,res){
 
 }
 module.exports={
+
+    importarSheets,
 
     listar,
 
