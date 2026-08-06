@@ -12,39 +12,52 @@ async function listarHomologaciones() {
 
             h.tipo_homologacion,
 
+            h.curso_equipo,
+
+            h.vendedor,
+
             h.monto_total,
 
             h.monto_pagado,
 
-            (h.monto_total-h.monto_pagado) saldo,
+            h.monto_indicado,
+
+            h.saldo_pendiente,
+
+            h.estado_pago,
+
+            h.estado_documento,
+
+            h.fecha_envio,
 
             h.estado,
 
             h.observaciones,
 
-            a.id alumno_id,
+            h.observaciones_admin,
 
-            a.nombres,
+            a.id AS alumno_id,
 
-            a.apellidos,
+            CONCAT(a.apellidos,' ',a.nombres) AS alumno,
 
-            a.dni,
+            h.dni,
 
-            a.celular
+            h.celular
 
         FROM homologaciones h
 
         INNER JOIN alumnos a
+            ON a.id = h.alumno_id
 
-        ON a.id=h.alumno_id
-
-        ORDER BY h.id DESC
+        ORDER BY h.fecha_registro DESC,
+                 h.id DESC
 
     `);
 
     return result.rows;
 
 }
+
 
 
 async function obtenerHomologacion(id){
@@ -57,19 +70,20 @@ async function obtenerHomologacion(id){
 
             h.*,
 
+            CONCAT(a.apellidos,' ',a.nombres) AS alumno,
+
             a.nombres,
 
             a.apellidos,
 
-            a.dni,
+            h.dni,
 
-            a.celular
+            h.celular
 
         FROM homologaciones h
 
         INNER JOIN alumnos a
-
-        ON a.id=h.alumno_id
+            ON a.id = h.alumno_id
 
         WHERE h.id=$1
 
@@ -89,6 +103,8 @@ async function obtenerHomologacion(id){
 
 }
 
+
+
 async function crearHomologacion(data){
 
     const result = await pool.query(
@@ -105,15 +121,39 @@ async function crearHomologacion(data){
 
             monto_pagado,
 
+            monto_indicado,
+
+            saldo_pendiente,
+
             estado,
 
-            observaciones
+            estado_pago,
+
+            estado_documento,
+
+            fecha_envio,
+
+            vendedor,
+
+            curso_equipo,
+
+            observaciones,
+
+            observaciones_admin,
+
+            dni,
+
+            celular
 
         )
 
         VALUES(
 
-            $1,$2,$3,$4,$5,$6
+            $1,$2,$3,$4,$5,$6,
+
+            $7,$8,$9,$10,$11,$12,
+
+            $13,$14,$15,$16
 
         )
 
@@ -131,9 +171,29 @@ async function crearHomologacion(data){
 
             data.montoPagado,
 
+            data.montoIndicado,
+
+            data.saldoPendiente,
+
             data.estado,
 
-            data.observaciones
+            data.estadoPago,
+
+            data.estadoDocumento,
+
+            data.fechaEnvio,
+
+            data.vendedor,
+
+            data.cursoEquipo,
+
+            data.observaciones,
+
+            data.observacionesAdmin,
+
+            data.dni,
+
+            data.celular
 
         ]
 
@@ -143,9 +203,11 @@ async function crearHomologacion(data){
 
 }
 
+
+
 async function actualizarEstado(id,data){
 
-    const result=await pool.query(
+    const result = await pool.query(
 
         `
 
@@ -155,9 +217,21 @@ async function actualizarEstado(id,data){
 
             estado=$1,
 
-            observaciones=$2
+            estado_pago=$2,
 
-        WHERE id=$3
+            estado_documento=$3,
+
+            monto_pagado=$4,
+
+            saldo_pendiente=$5,
+
+            fecha_envio=$6,
+
+            observaciones=$7,
+
+            observaciones_admin=$8
+
+        WHERE id=$9
 
         RETURNING *
 
@@ -167,7 +241,19 @@ async function actualizarEstado(id,data){
 
             data.estado,
 
+            data.estadoPago,
+
+            data.estadoDocumento,
+
+            data.montoPagado,
+
+            data.saldoPendiente,
+
+            data.fechaEnvio,
+
             data.observaciones,
+
+            data.observacionesAdmin,
 
             id
 
@@ -178,6 +264,8 @@ async function actualizarEstado(id,data){
     return result.rows[0];
 
 }
+
+
 
 async function eliminarHomologacion(id){
 
