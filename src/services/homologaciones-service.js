@@ -383,7 +383,7 @@ async function importarDesdeSheets() {
                     WHERE id=$12
                     `,
                     [
-                        row["FECHA "] || null,
+                        row["FECHA"] || null,
                         row["Vendedor"] || "",
                         row["CELULAR"] || "",
                         montoIndicado,
@@ -454,7 +454,7 @@ async function importarDesdeSheets() {
                     [
                         montoIndicado,
                         montoCancelado,
-                        row["FECHA "] || null,
+                        row["FECHA"] || null,
                         row["OBSERVACIONES"] || "",
                         dni,
                         row["CELULAR"] || "",
