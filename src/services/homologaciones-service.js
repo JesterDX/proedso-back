@@ -46,7 +46,10 @@ async function listarHomologaciones() {
 
             a.id AS alumno_id,
 
-            CONCAT(a.apellidos,' ',a.nombres) AS alumno,
+            COALESCE(
+                CONCAT(a.apellidos,' ',a.nombres),
+                'Sin alumno registrado'
+            ) AS alumno,
 
             h.dni,
 
@@ -54,7 +57,7 @@ async function listarHomologaciones() {
 
         FROM homologaciones h
 
-        INNER JOIN alumnos a
+        LEFT JOIN alumnos a
             ON a.id = h.alumno_id
 
         ORDER BY h.fecha_registro DESC,
