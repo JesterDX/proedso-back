@@ -12,57 +12,29 @@ async function listarHomologaciones() {
 
     const result = await pool.query(`
 
-        SELECT
+SELECT
 
-            h.id,
+    h.id,
+    h.fecha_registro,
+    h.alumno,
+    h.dni,
+    h.celular,
+    h.curso_equipo,
+    h.vendedor,
+    h.monto_total,
+    h.monto_pagado,
+    h.saldo_pendiente,
+    h.estado_pago,
+    h.estado_documento,
+    h.estado,
+    h.observaciones,
+    h.observaciones_admin
 
-            h.fecha_registro,
+FROM homologaciones h
 
-            h.tipo_homologacion,
-
-            h.curso_equipo,
-
-            h.vendedor,
-
-            h.monto_total,
-
-            h.monto_pagado,
-
-            h.monto_indicado,
-
-            h.saldo_pendiente,
-
-            h.estado_pago,
-
-            h.estado_documento,
-
-            h.fecha_envio,
-
-            h.estado,
-
-            h.observaciones,
-
-            h.observaciones_admin,
-
-            a.id AS alumno_id,
-
-            COALESCE(
-                CONCAT(a.apellidos,' ',a.nombres),
-                'Sin alumno registrado'
-            ) AS alumno,
-
-            h.dni,
-
-            h.celular
-
-        FROM homologaciones h
-
-        LEFT JOIN alumnos a
-            ON a.id = h.alumno_id
-
-        ORDER BY h.fecha_registro DESC,
-                 h.id DESC
-
+ORDER BY 
+h.fecha_registro DESC,
+h.id DESC
     `);
 
     return result.rows;
