@@ -1,4 +1,9 @@
+const axios = require('axios');
+const { parse } = require('csv-parse/sync');
 const pool = require('../config/db');
+const SHEETS_URL =
+'https://docs.google.com/spreadsheets/d/1xd2NGCo5rYryrJrW-BXebbTxPL6DMOWHBCHjjVLXma0/export?format=csv&gid=0';
+
 
 async function listarHomologaciones() {
 
@@ -285,9 +290,63 @@ async function eliminarHomologacion(id){
 
 }
 
+async function importarDesdeSheets(){
+
+    let creados = 0;
+
+    let actualizados = 0;
+
+    let omitidos = 0;
+
+    const errores = [];
+
+    // descargar csv
+
+    const respuesta = await axios.get(SHEETS_URL);
+
+    const filas = parse(
+
+        respuesta.data,
+
+        {
+
+            columns:true,
+
+            skip_empty_lines:true
+
+        }
+
+    );
+
+    console.log(
+
+        'Filas encontradas:',
+
+        filas.length
+
+    );
+
+    return {
+
+        creados,
+
+        actualizados,
+
+        omitidos,
+
+        errores,
+
+        filas
+
+    };
+
+}
+
 module.exports={
 
     listarHomologaciones,
+    importarDesdeSheets,
+    
 
     obtenerHomologacion,
 
