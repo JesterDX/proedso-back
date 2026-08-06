@@ -1,6 +1,9 @@
 const axios = require('axios');
 const { parse } = require('csv-parse/sync');
 const pool = require('../config/db');
+const { convertirFecha } = require('../utils/fechas');
+
+
 const SHEETS_URL =
 'https://docs.google.com/spreadsheets/d/1xd2NGCo5rYryrJrW-BXebbTxPL6DMOWHBCHjjVLXma0/export?format=csv&gid=0';
 
