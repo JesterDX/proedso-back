@@ -289,54 +289,206 @@ async function eliminarHomologacion(id){
     );
 
 }
-
-async function importarDesdeSheets(){
+async function importarDesdeSheets() {
 
     let creados = 0;
-
     let actualizados = 0;
-
     let omitidos = 0;
-
     const errores = [];
-
-    // descargar csv
 
     const respuesta = await axios.get(SHEETS_URL);
 
-    const filas = parse(
+    const filas = parse(respuesta.data, {
+        columns: true,
+        skip_empty_lines: true
+    });
 
-        respuesta.data,
+    for (const row of filas) {
 
-        {
+        try {
 
-            columns:true,
+            // ===============================
+            // LIMPIAR DATOS
+            // ===============================
 
-            skip_empty_lines:true
+            const dni = String(row["DNI"] ?? "").trim();
+
+            const curso = String(
+                row["Curso/ Equipos "] ??
+                row["Curso/ Equipos"] ??
+                ""
+            ).trim();
+
+            if (!dni || !curso) {
+                omitidos++;
+                continue;
+            }
+
+            const montoIndicado = Number(
+                String(row["MONTO INDICADO"] ?? "0")
+                    .replace(/\./g, "")
+                    .replace(",", ".")
+            ) || 0;
+
+            const montoCancelado = Number(
+                String(row["MONTO CANCELADO"] ?? "0")
+                    .replace(/\./g, "")
+                    .replace(",", ".")
+            ) || 0;
+
+            const saldo = Number(
+                String(row["SALDO PENDIENTE"] ?? "0")
+                    .replace(/\./g, "")
+                    .replace(",", ".")
+            ) || 0;
+
+            // ===============================
+            // BUSCAR SI YA EXISTE
+            // ===============================
+
+            const existe = await pool.query(
+                `
+                SELECT id
+                FROM homologaciones
+                WHERE dni=$1
+                AND curso_equipo=$2
+                `,
+                [dni, curso]
+            );
+
+            // ===============================
+            // UPDATE
+            // ===============================
+
+            if (existe.rows.length > 0) {
+
+                await pool.query(
+                    `
+                    UPDATE homologaciones
+                    SET
+                        fecha_registro=$1,
+                        vendedor=$2,
+                        celular=$3,
+                        monto_total=$4,
+                        monto_pagado=$5,
+                        monto_indicado=$6,
+                        saldo_pendiente=$7,
+                        estado_pago=$8,
+                        estado_documento=$9,
+                        observaciones=$10,
+                        observaciones_admin=$11
+                    WHERE id=$12
+                    `,
+                    [
+                        row["FECHA "] || null,
+                        row["Vendedor"] || "",
+                        row["CELULAR"] || "",
+                        montoIndicado,
+                        montoCancelado,
+                        montoIndicado,
+                        saldo,
+                        row["ESTADO DE PAGO"] || "",
+                        row["ESTADO DEL DOCUMENTO"] || "",
+                        row["OBSERVACIONES"] || "",
+                        row["OBSERVACIONES ADMIN"] || "",
+                        existe.rows[0].id
+                    ]
+                );
+
+                actualizados++;
+
+            }
+
+            // ===============================
+            // INSERT
+            // ===============================
+
+            else {
+
+                await pool.query(
+                    `
+                    INSERT INTO homologaciones
+                    (
+                        alumno_id,
+                        tipo_homologacion,
+                        monto_total,
+                        monto_pagado,
+                        fecha_registro,
+                        estado,
+                        observaciones,
+                        dni,
+                        celular,
+                        vendedor,
+                        curso_equipo,
+                        monto_indicado,
+                        saldo_pendiente,
+                        estado_pago,
+                        estado_documento,
+                        fecha_envio,
+                        observaciones_admin
+                    )
+                    VALUES
+                    (
+                        NULL,
+                        'INDIVIDUAL',
+                        $1,
+                        $2,
+                        $3,
+                        'REGISTRADO',
+                        $4,
+                        $5,
+                        $6,
+                        $7,
+                        $8,
+                        $9,
+                        $10,
+                        $11,
+                        $12,
+                        NULL,
+                        $13
+                    )
+                    `,
+                    [
+                        montoIndicado,
+                        montoCancelado,
+                        row["FECHA "] || null,
+                        row["OBSERVACIONES"] || "",
+                        dni,
+                        row["CELULAR"] || "",
+                        row["Vendedor"] || "",
+                        curso,
+                        montoIndicado,
+                        saldo,
+                        row["ESTADO DE PAGO"] || "",
+                        row["ESTADO DEL DOCUMENTO"] || "",
+                        row["OBSERVACIONES ADMIN"] || ""
+                    ]
+                );
+
+                creados++;
+
+            }
 
         }
 
-    );
+        catch (err) {
 
-    console.log(
+            errores.push({
+                dni: row["DNI"],
+                mensaje: err.message
+            });
 
-        'Filas encontradas:',
+        }
 
-        filas.length
-
-    );
+    }
 
     return {
 
+        ok: true,
         creados,
-
         actualizados,
-
         omitidos,
-
-        errores,
-
-        filas
+        errores
 
     };
 
