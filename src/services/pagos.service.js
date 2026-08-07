@@ -49,7 +49,11 @@ async function listarPagos(filtros = {}) {
 
     ppa.id AS plan_pago_alumno_id,
 
-    STRING_AGG(ma.nombre, ', ') AS maquinas,
+      STRING_AGG(
+      ma.nombre,
+      ', '
+      ORDER BY mm.orden, mm.id
+    ) FILTER (WHERE mm.estado = 'PENDIENTE') AS maquinas,
 
     pc.nombre AS plan_nombre
 
