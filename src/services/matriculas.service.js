@@ -6,6 +6,7 @@ const { crearAsignacionPracticas } = require('./practicas.service');
 // ==========================================================
 
 async function listarMatriculas(filtros = {}) {
+
   const {
     estado = null,
     search = '',
@@ -18,40 +19,70 @@ async function listarMatriculas(filtros = {}) {
 
   if (estado) {
     values.push(estado);
-    where += ` AND ea.codigo = $${values.length}`;
+
+    where += `
+      AND ea.codigo = $${values.length}
+    `;
   }
 
-  if (search && String(search).trim() !== '') {
-    const searchNormalizado = String(search).trim().toLowerCase();
+  if (
+    search &&
+    String(search).trim() !== ''
+  ) {
 
-    values.push(`%${searchNormalizado}%`);
+    const searchNormalizado =
+      String(search)
+        .trim()
+        .toLowerCase();
+
+    values.push(
+      `%${searchNormalizado}%`
+    );
 
     where += `
       AND (
         a.dni ILIKE $${values.length}
-        OR unaccent(lower(a.nombres)) LIKE unaccent($${values.length})
-        OR unaccent(lower(a.apellidos)) LIKE unaccent($${values.length})
-        OR unaccent(lower(a.nombres || ' ' || a.apellidos))
+
+        OR unaccent(lower(a.nombres))
           LIKE unaccent($${values.length})
-        OR unaccent(lower(a.apellidos || ' ' || a.nombres))
+
+        OR unaccent(lower(a.apellidos))
           LIKE unaccent($${values.length})
+
+        OR unaccent(
+          lower(
+            a.nombres || ' ' || a.apellidos
+          )
+        ) LIKE unaccent($${values.length})
+
+        OR unaccent(
+          lower(
+            a.apellidos || ' ' || a.nombres
+          )
+        ) LIKE unaccent($${values.length})
       )
     `;
   }
 
   if (anio) {
+
     values.push(Number(anio));
 
     where += `
-      AND EXTRACT(YEAR FROM m.fecha_matricula) = $${values.length}
+      AND EXTRACT(
+        YEAR FROM m.fecha_matricula
+      ) = $${values.length}
     `;
   }
 
   if (mes) {
+
     values.push(Number(mes));
 
     where += `
-      AND EXTRACT(MONTH FROM m.fecha_matricula) = $${values.length}
+      AND EXTRACT(
+        MONTH FROM m.fecha_matricula
+      ) = $${values.length}
     `;
   }
 
@@ -68,60 +99,81 @@ async function listarMatriculas(filtros = {}) {
       m.notas,
       m.activo,
       m.fecha_creacion
+
     FROM matriculas m
+
     INNER JOIN estados_alumno ea
       ON ea.id = m.estado_alumno_id
+
     INNER JOIN alumnos a
       ON a.id = m.alumno_id
+
     ${where}
+
     ORDER BY
       m.fecha_matricula DESC,
       m.id DESC
   `;
 
-  const result = await pool.query(query, values);
+  const result =
+    await pool.query(
+      query,
+      values
+    );
 
   return result.rows;
 }
+
 
 // ==========================================================
 // OBTENER MATRÍCULA POR ID
 // ==========================================================
 
 async function obtenerMatriculaPorId(id) {
-  const result = await pool.query(
-    `
-    SELECT *
-    FROM matriculas
-    WHERE id = $1
-    LIMIT 1
-    `,
-    [id]
-  );
+
+  const result =
+    await pool.query(
+      `
+      SELECT *
+      FROM matriculas
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [id]
+    );
 
   return result.rows[0] || null;
 }
+
 
 // ==========================================================
 // OBTENER ESTADO POR CÓDIGO
 // ==========================================================
 
-async function obtenerEstadoPorCodigo(codigo) {
-  const result = await pool.query(
-    `
-    SELECT
-      id,
-      codigo,
-      nombre
-    FROM estados_alumno
-    WHERE codigo = $1
-    LIMIT 1
-    `,
-    [codigo]
-  );
+async function obtenerEstadoPorCodigo(
+  codigo
+) {
+
+  const result =
+    await pool.query(
+      `
+      SELECT
+        id,
+        codigo,
+        nombre
+
+      FROM estados_alumno
+
+      WHERE codigo = $1
+
+      LIMIT 1
+      `,
+      [codigo]
+    );
 
   return result.rows[0] || null;
 }
+
 
 // ==========================================================
 // ACTUALIZAR ESTADO
@@ -132,23 +184,35 @@ async function actualizarEstadoMatricula(
   estadoAlumnoId,
   user
 ) {
-  const client = await pool.connect();
+
+  const client =
+    await pool.connect();
 
   try {
+
     await client.query('BEGIN');
 
-    const result = await client.query(
-      `
-      UPDATE matriculas
-      SET estado_alumno_id = $1
-      WHERE id = $2
-      RETURNING *
-      `,
-      [estadoAlumnoId, id]
-    );
+    const result =
+      await client.query(
+        `
+        UPDATE matriculas
+
+        SET estado_alumno_id = $1
+
+        WHERE id = $2
+
+        RETURNING *
+        `,
+        [
+          estadoAlumnoId,
+          id
+        ]
+      );
 
     if (!result.rows[0]) {
-      throw new Error('Matrícula no encontrada.');
+      throw new Error(
+        'Matrícula no encontrada.'
+      );
     }
 
     await registrarHistorial(
@@ -167,148 +231,175 @@ async function actualizarEstadoMatricula(
     return result.rows[0];
 
   } catch (error) {
-    await client.query('ROLLBACK');
+
+    await client.query(
+      'ROLLBACK'
+    );
+
     throw error;
 
   } finally {
+
     client.release();
   }
 }
+
 
 // ==========================================================
 // ACTUALIZAR MATRÍCULA SIMPLE
 // ==========================================================
 
-async function actualizarMatricula(id, data) {
-  const result = await pool.query(
-    `
-    UPDATE matriculas
-    SET
-      alumno_id = $1,
-      plan_curso_id = $2,
-      estado_alumno_id = $3,
-      fecha_matricula = $4,
-      fecha_inicio = $5,
-      fecha_fin_estimada = $6,
-      notas = $7
-    WHERE id = $8
-    RETURNING *
-    `,
-    [
-      data.alumno_id,
-      data.plan_curso_id,
-      data.estado_alumno_id,
-      data.fecha_matricula,
-      data.fecha_inicio || null,
-      data.fecha_fin_estimada || null,
-      data.notas || null,
-      id
-    ]
-  );
+async function actualizarMatricula(
+  id,
+  data
+) {
+
+  const result =
+    await pool.query(
+      `
+      UPDATE matriculas
+
+      SET
+        alumno_id = $1,
+        plan_curso_id = $2,
+        estado_alumno_id = $3,
+        fecha_matricula = $4,
+        fecha_inicio = $5,
+        fecha_fin_estimada = $6,
+        notas = $7
+
+      WHERE id = $8
+
+      RETURNING *
+      `,
+      [
+        data.alumno_id,
+        data.plan_curso_id,
+        data.estado_alumno_id,
+        data.fecha_matricula,
+        data.fecha_inicio || null,
+        data.fecha_fin_estimada || null,
+        data.notas || null,
+        id
+      ]
+    );
 
   return result.rows[0] || null;
 }
+
 
 // ==========================================================
 // OBTENER DETALLE DE MATRÍCULA
 // ==========================================================
 
-async function obtenerDetalleMatricula(id) {
-  const result = await pool.query(
-    `
-    SELECT
-      m.id,
-      m.alumno_id,
-      m.plan_curso_id,
-      m.estado_alumno_id,
-      m.fecha_matricula,
-      m.fecha_inicio,
-      m.fecha_fin_estimada,
-      m.cronograma_url,
-      m.notas,
-      m.activo,
-      m.fecha_creacion,
+async function obtenerDetalleMatricula(
+  id
+) {
 
-      a.dni AS alumno_dni,
-      a.nombres AS alumno_nombres,
-      a.apellidos AS alumno_apellidos,
-      a.fecha_nacimiento AS alumno_fecha_nacimiento,
-      a.telefono AS alumno_telefono,
-      a.correo AS alumno_correo,
-      a.direccion AS alumno_direccion,
-      a.foto_url AS alumno_foto_url,
-      a.observaciones AS alumno_observaciones,
-      a.seguro_alumno AS alumno_seguro_alumno,
+  const result =
+    await pool.query(
+      `
+      SELECT
+        m.id,
+        m.alumno_id,
+        m.plan_curso_id,
+        m.estado_alumno_id,
+        m.fecha_matricula,
+        m.fecha_inicio,
+        m.fecha_fin_estimada,
+        m.cronograma_url,
+        m.notas,
+        m.activo,
+        m.fecha_creacion,
 
-      pc.codigo AS plan_codigo,
-      pc.nombre AS plan_nombre,
-      pc.permite_eleccion_personalizada,
+        a.dni AS alumno_dni,
+        a.nombres AS alumno_nombres,
+        a.apellidos AS alumno_apellidos,
+        a.fecha_nacimiento AS alumno_fecha_nacimiento,
+        a.telefono AS alumno_telefono,
+        a.correo AS alumno_correo,
+        a.direccion AS alumno_direccion,
+        a.foto_url AS alumno_foto_url,
+        a.observaciones AS alumno_observaciones,
+        a.seguro_alumno AS alumno_seguro_alumno,
 
-      tc.codigo AS tipo_curso_codigo,
-      tc.nombre AS tipo_curso_nombre,
-      tc.cantidad_maquinas,
+        pc.codigo AS plan_codigo,
+        pc.nombre AS plan_nombre,
+        pc.permite_eleccion_personalizada,
 
-      ea.codigo AS estado_codigo,
-      ea.nombre AS estado_nombre
+        tc.codigo AS tipo_curso_codigo,
+        tc.nombre AS tipo_curso_nombre,
+        tc.cantidad_maquinas,
 
-    FROM matriculas m
+        ea.codigo AS estado_codigo,
+        ea.nombre AS estado_nombre
 
-    INNER JOIN alumnos a
-      ON a.id = m.alumno_id
+      FROM matriculas m
 
-    INNER JOIN planes_curso pc
-      ON pc.id = m.plan_curso_id
+      INNER JOIN alumnos a
+        ON a.id = m.alumno_id
 
-    INNER JOIN tipos_curso tc
-      ON tc.id = pc.tipo_curso_id
+      INNER JOIN planes_curso pc
+        ON pc.id = m.plan_curso_id
 
-    INNER JOIN estados_alumno ea
-      ON ea.id = m.estado_alumno_id
+      INNER JOIN tipos_curso tc
+        ON tc.id = pc.tipo_curso_id
 
-    WHERE m.id = $1
-    LIMIT 1
-    `,
-    [id]
-  );
+      INNER JOIN estados_alumno ea
+        ON ea.id = m.estado_alumno_id
+
+      WHERE m.id = $1
+
+      LIMIT 1
+      `,
+      [id]
+    );
 
   return result.rows[0] || null;
 }
+
 
 // ==========================================================
 // LISTAR MÁQUINAS DE MATRÍCULA
 // ==========================================================
 
-async function listarMaquinasDeMatricula(matriculaId) {
-  const result = await pool.query(
-    `
-    SELECT
-      mm.id,
-      mm.matricula_id,
-      mm.maquina_id,
-      mm.orden,
-      mm.es_regalo,
-      mm.horas_asignadas,
-      mm.sesiones_totales,
-      mm.sesiones_completadas,
-      mm.estado,
-      m.nombre AS maquina_nombre
+async function listarMaquinasDeMatricula(
+  matriculaId
+) {
 
-    FROM matricula_maquinas mm
+  const result =
+    await pool.query(
+      `
+      SELECT
+        mm.id,
+        mm.matricula_id,
+        mm.maquina_id,
+        mm.orden,
+        mm.es_regalo,
+        mm.horas_asignadas,
+        mm.sesiones_totales,
+        mm.sesiones_completadas,
+        mm.estado,
 
-    INNER JOIN maquinas m
-      ON m.id = mm.maquina_id
+        m.nombre AS maquina_nombre
 
-    WHERE mm.matricula_id = $1
+      FROM matricula_maquinas mm
 
-    ORDER BY
-      mm.orden ASC,
-      mm.id ASC
-    `,
-    [matriculaId]
-  );
+      INNER JOIN maquinas m
+        ON m.id = mm.maquina_id
+
+      WHERE mm.matricula_id = $1
+
+      ORDER BY
+        mm.orden ASC,
+        mm.id ASC
+      `,
+      [matriculaId]
+    );
 
   return result.rows;
 }
+
 
 // ==========================================================
 // OBTENER PLAN DE CURSO
@@ -318,31 +409,35 @@ async function obtenerPlanCursoDetalle(
   client,
   planCursoId
 ) {
-  const result = await client.query(
-    `
-    SELECT
-      pc.id,
-      pc.codigo,
-      pc.nombre,
-      pc.permite_eleccion_personalizada,
 
-      tc.codigo AS tipo_curso_codigo,
-      tc.nombre AS tipo_curso_nombre,
-      tc.cantidad_maquinas
+  const result =
+    await client.query(
+      `
+      SELECT
+        pc.id,
+        pc.codigo,
+        pc.nombre,
+        pc.permite_eleccion_personalizada,
 
-    FROM planes_curso pc
+        tc.codigo AS tipo_curso_codigo,
+        tc.nombre AS tipo_curso_nombre,
+        tc.cantidad_maquinas
 
-    INNER JOIN tipos_curso tc
-      ON tc.id = pc.tipo_curso_id
+      FROM planes_curso pc
 
-    WHERE pc.id = $1
-    LIMIT 1
-    `,
-    [planCursoId]
-  );
+      INNER JOIN tipos_curso tc
+        ON tc.id = pc.tipo_curso_id
+
+      WHERE pc.id = $1
+
+      LIMIT 1
+      `,
+      [planCursoId]
+    );
 
   return result.rows[0] || null;
 }
+
 
 // ==========================================================
 // OBTENER MÁQUINA POR NOMBRE
@@ -352,20 +447,27 @@ async function obtenerMaquinaPorNombre(
   client,
   nombre
 ) {
-  const result = await client.query(
-    `
-    SELECT
-      id,
-      nombre
-    FROM maquinas
-    WHERE LOWER(nombre) = LOWER($1)
-    LIMIT 1
-    `,
-    [nombre]
-  );
+
+  const result =
+    await client.query(
+      `
+      SELECT
+        id,
+        nombre
+
+      FROM maquinas
+
+      WHERE LOWER(nombre) =
+            LOWER($1)
+
+      LIMIT 1
+      `,
+      [nombre]
+    );
 
   return result.rows[0] || null;
 }
+
 
 // ==========================================================
 // OBTENER MÁQUINAS DEL PLAN
@@ -375,26 +477,29 @@ async function obtenerPlanMaquinas(
   client,
   planCursoId
 ) {
-  const result = await client.query(
-    `
-    SELECT
-      maquina_id,
-      orden,
-      es_regalo
 
-    FROM plan_maquinas
+  const result =
+    await client.query(
+      `
+      SELECT
+        maquina_id,
+        orden,
+        es_regalo
 
-    WHERE plan_curso_id = $1
+      FROM plan_maquinas
 
-    ORDER BY
-      orden ASC,
-      id ASC
-    `,
-    [planCursoId]
-  );
+      WHERE plan_curso_id = $1
+
+      ORDER BY
+        orden ASC,
+        id ASC
+      `,
+      [planCursoId]
+    );
 
   return result.rows;
 }
+
 
 // ==========================================================
 // OBTENER HORAS DE PRÁCTICA
@@ -405,27 +510,30 @@ async function obtenerHorasPlanPorMaquina(
   planCursoId,
   maquinaId
 ) {
-  const result = await client.query(
-    `
-    SELECT
-      horas,
-      sesiones_totales
 
-    FROM plan_horas_practica
+  const result =
+    await client.query(
+      `
+      SELECT
+        horas,
+        sesiones_totales
 
-    WHERE plan_curso_id = $1
-      AND maquina_id = $2
+      FROM plan_horas_practica
 
-    LIMIT 1
-    `,
-    [
-      planCursoId,
-      maquinaId
-    ]
-  );
+      WHERE plan_curso_id = $1
+        AND maquina_id = $2
+
+      LIMIT 1
+      `,
+      [
+        planCursoId,
+        maquinaId
+      ]
+    );
 
   return result.rows[0] || null;
 }
+
 
 // ==========================================================
 // INSERTAR MATRÍCULA-MÁQUINA
@@ -435,42 +543,47 @@ async function insertarMatriculaMaquina(
   client,
   data
 ) {
-  const result = await client.query(
-    `
-    INSERT INTO matricula_maquinas (
-      matricula_id,
-      maquina_id,
-      orden,
-      es_regalo,
-      horas_asignadas,
-      sesiones_totales,
-      sesiones_completadas,
-      estado
-    )
-    VALUES (
-      $1,
-      $2,
-      $3,
-      $4,
-      $5,
-      $6,
-      0,
-      'PENDIENTE'
-    )
-    RETURNING *
-    `,
-    [
-      data.matricula_id,
-      data.maquina_id,
-      data.orden,
-      data.es_regalo,
-      data.horas_asignadas,
-      data.sesiones_totales
-    ]
-  );
+
+  const result =
+    await client.query(
+      `
+      INSERT INTO matricula_maquinas (
+        matricula_id,
+        maquina_id,
+        orden,
+        es_regalo,
+        horas_asignadas,
+        sesiones_totales,
+        sesiones_completadas,
+        estado
+      )
+
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        0,
+        'PENDIENTE'
+      )
+
+      RETURNING *
+      `,
+      [
+        data.matricula_id,
+        data.maquina_id,
+        data.orden,
+        data.es_regalo,
+        data.horas_asignadas,
+        data.sesiones_totales
+      ]
+    );
 
   return result.rows[0];
 }
+
 
 // ==========================================================
 // OBTENER PRECIO VIGENTE
@@ -483,6 +596,7 @@ async function obtenerPlanPrecioVigente(
   maquinasAGuardar = [],
   tipoCursoCodigo = ''
 ) {
+
   const maquinasIds =
     maquinasAGuardar.map(
       m => Number(m.maquina_id)
@@ -494,15 +608,17 @@ async function obtenerPlanPrecioVigente(
       'Tractor de Cadenas'
     );
 
-  const tieneTractor = tractor
-    ? maquinasIds.includes(
-        Number(tractor.id)
-      )
-    : false;
+  const tieneTractor =
+    tractor
+      ? maquinasIds.includes(
+          Number(tractor.id)
+        )
+      : false;
 
   const tipo =
-    String(tipoCursoCodigo || '')
-      .toUpperCase();
+    String(
+      tipoCursoCodigo || ''
+    ).toUpperCase();
 
   let query = `
     SELECT
@@ -551,26 +667,33 @@ async function obtenerPlanPrecioVigente(
       maquinasAGuardar[0];
 
     if (!maquinaPrincipal) {
+
       throw new Error(
         'No se encontró la máquina seleccionada para calcular el precio individual.'
       );
     }
 
     values.push(
-      Number(maquinaPrincipal.maquina_id)
+      Number(
+        maquinaPrincipal.maquina_id
+      )
     );
 
     query += `
-      AND aplica_maquina_id = $${values.length}
+      AND aplica_maquina_id =
+          $${values.length}
     `;
   }
 
   if (tipo === 'DOBLE') {
 
-    values.push(tieneTractor);
+    values.push(
+      tieneTractor
+    );
 
     query += `
-      AND requiere_tractor = $${values.length}
+      AND requiere_tractor =
+          $${values.length}
     `;
   }
 
@@ -578,6 +701,7 @@ async function obtenerPlanPrecioVigente(
     tipo === 'TRIPLE' ||
     tipo === 'MULTIPLE'
   ) {
+
     query += `
       AND aplica_maquina_id IS NULL
     `;
@@ -587,6 +711,7 @@ async function obtenerPlanPrecioVigente(
     ORDER BY
       vigente_desde DESC NULLS LAST,
       id DESC
+
     LIMIT 1
   `;
 
@@ -599,6 +724,7 @@ async function obtenerPlanPrecioVigente(
   return result.rows[0] || null;
 }
 
+
 // ==========================================================
 // CONCEPTO DE COBRO
 // ==========================================================
@@ -607,24 +733,27 @@ async function obtenerConceptoCobroPorCodigo(
   client,
   codigo
 ) {
-  const result = await client.query(
-    `
-    SELECT
-      id,
-      codigo,
-      nombre
 
-    FROM conceptos_cobro
+  const result =
+    await client.query(
+      `
+      SELECT
+        id,
+        codigo,
+        nombre
 
-    WHERE codigo = $1
+      FROM conceptos_cobro
 
-    LIMIT 1
-    `,
-    [codigo]
-  );
+      WHERE codigo = $1
+
+      LIMIT 1
+      `,
+      [codigo]
+    );
 
   return result.rows[0] || null;
 }
+
 
 // ==========================================================
 // INSERTAR PLAN DE PAGOS
@@ -634,49 +763,52 @@ async function insertarPlanPagoAlumno(
   client,
   data
 ) {
-  const result = await client.query(
-    `
-    INSERT INTO planes_pago_alumno (
-      matricula_id,
-      plan_precio_id,
-      monto_total,
-      monto_matricula,
-      monto_certificacion,
-      cantidad_cuotas,
-      monto_cuota,
-      nota_pago,
-      modalidad_pago
-    )
 
-    VALUES (
-      $1,
-      $2,
-      $3,
-      $4,
-      $5,
-      $6,
-      $7,
-      $8,
-      $9
-    )
+  const result =
+    await client.query(
+      `
+      INSERT INTO planes_pago_alumno (
+        matricula_id,
+        plan_precio_id,
+        monto_total,
+        monto_matricula,
+        monto_certificacion,
+        cantidad_cuotas,
+        monto_cuota,
+        nota_pago,
+        modalidad_pago
+      )
 
-    RETURNING *
-    `,
-    [
-      data.matricula_id,
-      data.plan_precio_id,
-      data.monto_total,
-      data.monto_matricula,
-      data.monto_certificacion,
-      data.cantidad_cuotas,
-      data.monto_cuota,
-      data.nota_pago || null,
-      data.modalidad_pago || 'MENSUAL'
-    ]
-  );
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9
+      )
+
+      RETURNING *
+      `,
+      [
+        data.matricula_id,
+        data.plan_precio_id,
+        data.monto_total,
+        data.monto_matricula,
+        data.monto_certificacion,
+        data.cantidad_cuotas,
+        data.monto_cuota,
+        data.nota_pago || null,
+        data.modalidad_pago || 'MENSUAL'
+      ]
+    );
 
   return result.rows[0];
 }
+
 
 // ==========================================================
 // INSERTAR CUOTA
@@ -686,49 +818,908 @@ async function insertarCuota(
   client,
   data
 ) {
-  const result = await client.query(
-    `
-    INSERT INTO cuotas (
-      plan_pago_alumno_id,
-      numero_cuota,
-      concepto_id,
-      fecha_programada,
-      fecha_vencimiento,
-      monto_programado,
-      monto_pagado,
-      saldo_pendiente,
-      estado,
-      observaciones
-    )
 
-    VALUES (
-      $1,
-      $2,
-      $3,
-      $4,
-      $5,
-      $6,
-      0,
-      $6,
-      'PENDIENTE',
-      $7
-    )
+  const result =
+    await client.query(
+      `
+      INSERT INTO cuotas (
+        plan_pago_alumno_id,
+        numero_cuota,
+        concepto_id,
+        fecha_programada,
+        fecha_vencimiento,
+        monto_programado,
+        monto_pagado,
+        saldo_pendiente,
+        estado,
+        observaciones
+      )
 
-    RETURNING *
-    `,
-    [
-      data.plan_pago_alumno_id,
-      data.numero_cuota,
-      data.concepto_id,
-      data.fecha_programada,
-      data.fecha_vencimiento,
-      data.monto_programado,
-      data.observaciones || null
-    ]
-  );
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        0,
+        $6,
+        'PENDIENTE',
+        $7
+      )
+
+      RETURNING *
+      `,
+      [
+        data.plan_pago_alumno_id,
+        data.numero_cuota,
+        data.concepto_id,
+        data.fecha_programada,
+        data.fecha_vencimiento,
+        data.monto_programado,
+        data.observaciones || null
+      ]
+    );
 
   return result.rows[0];
 }
+
+
+// ==========================================================
+// CALCULAR ESTRUCTURA FINANCIERA
+//
+// ESTA ES LA PARTE IMPORTANTE.
+//
+// El monto_total SIEMPRE debe cerrar:
+//
+// matrícula
+// + cuotas
+// + certificación
+// = monto_total
+//
+// La última cuota absorbe cualquier diferencia de centavos.
+// ==========================================================
+
+function calcularEstructuraFinanciera(
+  planPrecio,
+  modalidadPago
+) {
+
+  const montoTotal =
+    Number(
+      planPrecio.monto_total || 0
+    );
+
+  const montoMatricula =
+    Number(
+      planPrecio.matricula || 0
+    );
+
+  const montoCertificacion =
+    Number(
+      planPrecio.certificacion || 0
+    );
+
+  const cantidadCuotasBase =
+    Number(
+      planPrecio.cantidad_cuotas || 0
+    );
+
+  const montoCuotaBase =
+    Number(
+      planPrecio.monto_cuota || 0
+    );
+
+  const modalidad =
+    String(
+      modalidadPago || 'MENSUAL'
+    ).toUpperCase();
+
+  if (
+    montoTotal <= 0
+  ) {
+    throw new Error(
+      'El monto total del plan de precio no es válido.'
+    );
+  }
+
+  if (
+    cantidadCuotasBase <= 0
+  ) {
+    throw new Error(
+      'El plan de precio no tiene una cantidad válida de cuotas.'
+    );
+  }
+
+  if (
+    montoCuotaBase <= 0
+  ) {
+    throw new Error(
+      'El plan de precio no tiene un monto de cuota válido.'
+    );
+  }
+
+  const cantidadCuotasFinal =
+    modalidad === 'QUINCENAL'
+      ? cantidadCuotasBase * 2
+      : cantidadCuotasBase;
+
+  const montoDisponibleParaCuotas =
+    Number(
+      (
+        montoTotal -
+        montoMatricula -
+        montoCertificacion
+      ).toFixed(2)
+    );
+
+  if (
+    montoDisponibleParaCuotas <= 0
+  ) {
+    throw new Error(
+      'El monto destinado a cuotas no es válido.'
+    );
+  }
+
+  let montoCuotaBaseFinal;
+
+  if (
+    modalidad === 'QUINCENAL'
+  ) {
+
+    montoCuotaBaseFinal =
+      Number(
+        (
+          montoCuotaBase / 2
+        ).toFixed(2)
+      );
+
+  } else {
+
+    montoCuotaBaseFinal =
+      Number(
+        montoCuotaBase.toFixed(2)
+      );
+  }
+
+  if (
+    montoCuotaBaseFinal <= 0
+  ) {
+    throw new Error(
+      'El monto calculado de la cuota no es válido.'
+    );
+  }
+
+  // --------------------------------------------------------
+  // Generar importes
+  // --------------------------------------------------------
+
+  const cuotas = [];
+
+  let acumulado = 0;
+
+  for (
+    let i = 1;
+    i <= cantidadCuotasFinal;
+    i++
+  ) {
+
+    let monto;
+
+    if (
+      i === cantidadCuotasFinal
+    ) {
+
+      // ----------------------------------------------------
+      // ÚLTIMA CUOTA
+      //
+      // Aquí cerramos exactamente el total.
+      // ----------------------------------------------------
+
+      monto =
+        Number(
+          (
+            montoDisponibleParaCuotas -
+            acumulado
+          ).toFixed(2)
+        );
+
+    } else {
+
+      monto =
+        montoCuotaBaseFinal;
+    }
+
+    if (
+      monto <= 0
+    ) {
+      throw new Error(
+        `La cuota ${i} resultó con un monto inválido (${monto}).`
+      );
+    }
+
+    acumulado =
+      Number(
+        (
+          acumulado + monto
+        ).toFixed(2)
+      );
+
+    cuotas.push({
+      numero_cuota: i,
+      monto: monto
+    });
+  }
+
+  // --------------------------------------------------------
+  // VALIDACIÓN FINAL
+  // --------------------------------------------------------
+
+  const totalCalculado =
+    Number(
+      (
+        montoMatricula +
+        acumulado +
+        montoCertificacion
+      ).toFixed(2)
+    );
+
+  if (
+    totalCalculado !==
+    Number(
+      montoTotal.toFixed(2)
+    )
+  ) {
+
+    throw new Error(
+      `El plan de pagos no cierra. Total esperado: ${montoTotal}. Total calculado: ${totalCalculado}.`
+    );
+  }
+
+  return {
+    montoTotal,
+    montoMatricula,
+    montoCertificacion,
+    cantidadCuotasBase,
+    cantidadCuotasFinal,
+    montoCuotaBase,
+    montoCuotaFinal:
+      cuotas.length > 0
+        ? cuotas[0].monto
+        : montoCuotaBaseFinal,
+    cuotas,
+    modalidad
+  };
+}
+
+
+// ==========================================================
+// GENERAR FECHAS DE CUOTAS
+// ==========================================================
+
+function generarFechasCuotas(
+  fechaBase,
+  cuotas,
+  modalidadPago
+) {
+
+  const diasEntreCuotas =
+    String(
+      modalidadPago || 'MENSUAL'
+    ).toUpperCase() === 'QUINCENAL'
+      ? 14
+      : 20;
+
+  return cuotas.map(
+    cuota => {
+
+      const fecha =
+        sumarDias(
+          fechaBase,
+          diasEntreCuotas *
+            (
+              cuota.numero_cuota - 1
+            )
+        );
+
+      return {
+        ...cuota,
+        fecha_programada: fecha,
+        fecha_vencimiento: fecha
+      };
+    }
+  );
+}
+
+
+// ==========================================================
+// OBTENER PLAN DE PAGO ACTUAL
+// ==========================================================
+
+async function obtenerPlanPagoAlumno(
+  client,
+  matriculaId
+) {
+
+  const result =
+    await client.query(
+      `
+      SELECT *
+      FROM planes_pago_alumno
+      WHERE matricula_id = $1
+      ORDER BY id DESC
+      LIMIT 1
+      `,
+      [matriculaId]
+    );
+
+  return result.rows[0] || null;
+}
+
+
+// ==========================================================
+// VALIDAR SI EXISTEN PAGOS
+//
+// No permitimos destruir/reconstruir cuotas si ya existe
+// dinero pagado.
+// ==========================================================
+
+async function validarPlanSinPagos(
+  client,
+  planPagoAlumnoId
+) {
+
+  const result =
+    await client.query(
+      `
+      SELECT
+        COUNT(*) FILTER (
+          WHERE COALESCE(monto_pagado, 0) > 0
+             OR estado IN (
+               'PAGADO',
+               'PARCIAL'
+             )
+        ) AS cuotas_con_pago,
+
+        COALESCE(
+          SUM(
+            COALESCE(monto_pagado, 0)
+          ),
+          0
+        ) AS total_pagado
+
+      FROM cuotas
+
+      WHERE plan_pago_alumno_id = $1
+      `,
+      [planPagoAlumnoId]
+    );
+
+  const fila =
+    result.rows[0];
+
+  const cuotasConPago =
+    Number(
+      fila.cuotas_con_pago || 0
+    );
+
+  const totalPagado =
+    Number(
+      fila.total_pagado || 0
+    );
+
+  if (
+    cuotasConPago > 0 ||
+    totalPagado > 0
+  ) {
+
+    throw new Error(
+      'No se puede recalcular el plan de pagos porque la matrícula ya tiene pagos registrados. Los pagos existentes deben conservarse y el cambio financiero debe realizarse manualmente.'
+    );
+  }
+}
+
+
+// ==========================================================
+// CREAR PLAN FINANCIERO COMPLETO
+// ==========================================================
+
+async function crearPlanFinanciero(
+  client,
+  {
+    matriculaId,
+    planPrecio,
+    fechaMatricula,
+    fechaInicio,
+    fechaFinEstimada,
+    modalidadPago,
+    nombresMaquinas
+  }
+) {
+
+  const conceptoMatricula =
+    await obtenerConceptoCobroPorCodigo(
+      client,
+      'MATRICULA'
+    );
+
+  const conceptoCuota =
+    await obtenerConceptoCobroPorCodigo(
+      client,
+      'CUOTA'
+    );
+
+  const conceptoCertificacion =
+    await obtenerConceptoCobroPorCodigo(
+      client,
+      'CERTIFICACION'
+    );
+
+  if (
+    !conceptoMatricula ||
+    !conceptoCuota ||
+    !conceptoCertificacion
+  ) {
+
+    throw new Error(
+      'Faltan conceptos de cobro base.'
+    );
+  }
+
+  const financiera =
+    calcularEstructuraFinanciera(
+      planPrecio,
+      modalidadPago
+    );
+
+  const fechaBaseCuotas =
+    fechaInicio ||
+    fechaMatricula;
+
+  if (!fechaBaseCuotas) {
+    throw new Error(
+      'No existe una fecha base para generar las cuotas.'
+    );
+  }
+
+  const cuotasConFechas =
+    generarFechasCuotas(
+      fechaBaseCuotas,
+      financiera.cuotas,
+      financiera.modalidad
+    );
+
+  const notaPago =
+    `${planPrecio.nombre} - Máquinas: ${nombresMaquinas.join(', ')}`;
+
+  const planPagoAlumno =
+    await insertarPlanPagoAlumno(
+      client,
+      {
+        matricula_id:
+          matriculaId,
+
+        plan_precio_id:
+          planPrecio.id,
+
+        monto_total:
+          financiera.montoTotal,
+
+        monto_matricula:
+          financiera.montoMatricula,
+
+        monto_certificacion:
+          financiera.montoCertificacion,
+
+        cantidad_cuotas:
+          financiera.cantidadCuotasFinal,
+
+        monto_cuota:
+          financiera.montoCuotaFinal,
+
+        nota_pago:
+          notaPago,
+
+        modalidad_pago:
+          financiera.modalidad
+      }
+    );
+
+  // --------------------------------------------------------
+  // MATRÍCULA
+  // --------------------------------------------------------
+
+  if (
+    financiera.montoMatricula > 0
+  ) {
+
+    await insertarCuota(
+      client,
+      {
+        plan_pago_alumno_id:
+          planPagoAlumno.id,
+
+        numero_cuota:
+          0,
+
+        concepto_id:
+          conceptoMatricula.id,
+
+        fecha_programada:
+          fechaMatricula,
+
+        fecha_vencimiento:
+          fechaMatricula,
+
+        monto_programado:
+          financiera.montoMatricula,
+
+        observaciones:
+          'Pago de matrícula'
+      }
+    );
+  }
+
+  // --------------------------------------------------------
+  // CUOTAS
+  // --------------------------------------------------------
+
+  for (
+    const cuota
+    of cuotasConFechas
+  ) {
+
+    await insertarCuota(
+      client,
+      {
+        plan_pago_alumno_id:
+          planPagoAlumno.id,
+
+        numero_cuota:
+          cuota.numero_cuota,
+
+        concepto_id:
+          conceptoCuota.id,
+
+        fecha_programada:
+          cuota.fecha_programada,
+
+        fecha_vencimiento:
+          cuota.fecha_vencimiento,
+
+        monto_programado:
+          cuota.monto,
+
+        observaciones:
+          `Cuota ${cuota.numero_cuota} de ${financiera.cantidadCuotasFinal} - ${financiera.modalidad}`
+      }
+    );
+  }
+
+  // --------------------------------------------------------
+  // CERTIFICACIÓN
+  // --------------------------------------------------------
+
+  if (
+    financiera.montoCertificacion > 0
+  ) {
+
+    const fechaCertificacion =
+      fechaFinEstimada ||
+      sumarMeses(
+        fechaBaseCuotas,
+        financiera.cantidadCuotasBase
+      );
+
+    await insertarCuota(
+      client,
+      {
+        plan_pago_alumno_id:
+          planPagoAlumno.id,
+
+        numero_cuota:
+          null,
+
+        concepto_id:
+          conceptoCertificacion.id,
+
+        fecha_programada:
+          fechaCertificacion,
+
+        fecha_vencimiento:
+          fechaCertificacion,
+
+        monto_programado:
+          financiera.montoCertificacion,
+
+        observaciones:
+          'Carpeta y certificación'
+      }
+    );
+  }
+
+  return planPagoAlumno;
+}
+
+
+// ==========================================================
+// RECALCULAR PLAN FINANCIERO
+//
+// Se utiliza cuando cambia:
+// - plan de curso
+// - máquina que determina precio
+// - modalidad de pago
+//
+// Solo se permite automáticamente si todavía no existen
+// pagos registrados.
+// ==========================================================
+
+async function recalcularPlanFinanciero(
+  client,
+  {
+    matriculaId,
+    planPagoActual,
+    planPrecio,
+    fechaMatricula,
+    fechaInicio,
+    fechaFinEstimada,
+    modalidadPago,
+    nombresMaquinas
+  }
+) {
+
+  if (!planPagoActual) {
+
+    return await crearPlanFinanciero(
+      client,
+      {
+        matriculaId,
+        planPrecio,
+        fechaMatricula,
+        fechaInicio,
+        fechaFinEstimada,
+        modalidadPago,
+        nombresMaquinas
+      }
+    );
+  }
+
+  await validarPlanSinPagos(
+    client,
+    planPagoActual.id
+  );
+
+  // --------------------------------------------------------
+  // ELIMINAR SOLAMENTE LAS CUOTAS DEL PLAN ACTUAL
+  //
+  // Como validamos que no haya pagos, no destruimos
+  // información financiera real.
+  // --------------------------------------------------------
+
+  await client.query(
+    `
+    DELETE FROM cuotas
+    WHERE plan_pago_alumno_id = $1
+    `,
+    [
+      planPagoActual.id
+    ]
+  );
+
+  const financiera =
+    calcularEstructuraFinanciera(
+      planPrecio,
+      modalidadPago
+    );
+
+  const fechaBaseCuotas =
+    fechaInicio ||
+    fechaMatricula;
+
+  if (!fechaBaseCuotas) {
+    throw new Error(
+      'No existe una fecha base para generar las cuotas.'
+    );
+  }
+
+  const cuotasConFechas =
+    generarFechasCuotas(
+      fechaBaseCuotas,
+      financiera.cuotas,
+      financiera.modalidad
+    );
+
+  const notaPago =
+    `${planPrecio.nombre} - Máquinas: ${nombresMaquinas.join(', ')}`;
+
+  // --------------------------------------------------------
+  // ACTUALIZAR PLAN
+  // --------------------------------------------------------
+
+  await client.query(
+    `
+    UPDATE planes_pago_alumno
+
+    SET
+      plan_precio_id = $1,
+      monto_total = $2,
+      monto_matricula = $3,
+      monto_certificacion = $4,
+      cantidad_cuotas = $5,
+      monto_cuota = $6,
+      nota_pago = $7,
+      modalidad_pago = $8
+
+    WHERE id = $9
+    `,
+    [
+      planPrecio.id,
+      financiera.montoTotal,
+      financiera.montoMatricula,
+      financiera.montoCertificacion,
+      financiera.cantidadCuotasFinal,
+      financiera.montoCuotaFinal,
+      notaPago,
+      financiera.modalidad,
+      planPagoActual.id
+    ]
+  );
+
+  // --------------------------------------------------------
+  // CONCEPTOS
+  // --------------------------------------------------------
+
+  const conceptoMatricula =
+    await obtenerConceptoCobroPorCodigo(
+      client,
+      'MATRICULA'
+    );
+
+  const conceptoCuota =
+    await obtenerConceptoCobroPorCodigo(
+      client,
+      'CUOTA'
+    );
+
+  const conceptoCertificacion =
+    await obtenerConceptoCobroPorCodigo(
+      client,
+      'CERTIFICACION'
+    );
+
+  if (
+    !conceptoMatricula ||
+    !conceptoCuota ||
+    !conceptoCertificacion
+  ) {
+
+    throw new Error(
+      'Faltan conceptos de cobro base.'
+    );
+  }
+
+  // --------------------------------------------------------
+  // MATRÍCULA
+  // --------------------------------------------------------
+
+  if (
+    financiera.montoMatricula > 0
+  ) {
+
+    await insertarCuota(
+      client,
+      {
+        plan_pago_alumno_id:
+          planPagoActual.id,
+
+        numero_cuota:
+          0,
+
+        concepto_id:
+          conceptoMatricula.id,
+
+        fecha_programada:
+          fechaMatricula,
+
+        fecha_vencimiento:
+          fechaMatricula,
+
+        monto_programado:
+          financiera.montoMatricula,
+
+        observaciones:
+          'Pago de matrícula'
+      }
+    );
+  }
+
+  // --------------------------------------------------------
+  // CUOTAS
+  // --------------------------------------------------------
+
+  for (
+    const cuota
+    of cuotasConFechas
+  ) {
+
+    await insertarCuota(
+      client,
+      {
+        plan_pago_alumno_id:
+          planPagoActual.id,
+
+        numero_cuota:
+          cuota.numero_cuota,
+
+        concepto_id:
+          conceptoCuota.id,
+
+        fecha_programada:
+          cuota.fecha_programada,
+
+        fecha_vencimiento:
+          cuota.fecha_vencimiento,
+
+        monto_programado:
+          cuota.monto,
+
+        observaciones:
+          `Cuota ${cuota.numero_cuota} de ${financiera.cantidadCuotasFinal} - ${financiera.modalidad}`
+      }
+    );
+  }
+
+  // --------------------------------------------------------
+  // CERTIFICACIÓN
+  // --------------------------------------------------------
+
+  if (
+    financiera.montoCertificacion > 0
+  ) {
+
+    const fechaCertificacion =
+      fechaFinEstimada ||
+      sumarMeses(
+        fechaBaseCuotas,
+        financiera.cantidadCuotasBase
+      );
+
+    await insertarCuota(
+      client,
+      {
+        plan_pago_alumno_id:
+          planPagoActual.id,
+
+        numero_cuota:
+          null,
+
+        concepto_id:
+          conceptoCertificacion.id,
+
+        fecha_programada:
+          fechaCertificacion,
+
+        fecha_vencimiento:
+          fechaCertificacion,
+
+        monto_programado:
+          financiera.montoCertificacion,
+
+        observaciones:
+          'Carpeta y certificación'
+      }
+    );
+  }
+
+  const actualizado =
+    await obtenerPlanPagoAlumno(
+      client,
+      matriculaId
+    );
+
+  return actualizado;
+}
+
 
 // ==========================================================
 // CREAR MATRÍCULA
@@ -738,12 +1729,15 @@ async function crearMatricula(
   data,
   user
 ) {
+
   const client =
     await pool.connect();
 
   try {
 
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
     // ------------------------------------------------------
     // CREAR MATRÍCULA
@@ -803,8 +1797,12 @@ async function crearMatricula(
     await registrarHistorial(
       client,
       {
-        matricula_id: matriculaId,
-        accion: 'CREACION',
+        matricula_id:
+          matriculaId,
+
+        accion:
+          'CREACION',
+
         descripcion:
           `Matrícula creada con estado ID ${data.estado_alumno_id}`
       },
@@ -812,7 +1810,7 @@ async function crearMatricula(
     );
 
     // ------------------------------------------------------
-    // OBTENER PLAN
+    // PLAN
     // ------------------------------------------------------
 
     const plan =
@@ -828,7 +1826,7 @@ async function crearMatricula(
     }
 
     // ------------------------------------------------------
-    // DETERMINAR MÁQUINAS
+    // MÁQUINAS
     // ------------------------------------------------------
 
     const maquinasAGuardar =
@@ -844,7 +1842,10 @@ async function crearMatricula(
 
     const nombresMaquinas = [];
 
-    for (const item of maquinasAGuardar) {
+    for (
+      const item
+      of maquinasAGuardar
+    ) {
 
       const maquinaResult =
         await client.query(
@@ -853,10 +1854,15 @@ async function crearMatricula(
           FROM maquinas
           WHERE id = $1
           `,
-          [item.maquina_id]
+          [
+            item.maquina_id
+          ]
         );
 
-      if (maquinaResult.rows[0]) {
+      if (
+        maquinaResult.rows[0]
+      ) {
+
         nombresMaquinas.push(
           maquinaResult.rows[0].nombre
         );
@@ -870,6 +1876,7 @@ async function crearMatricula(
         );
 
       if (!horasPlan) {
+
         throw new Error(
           `No existe configuración de horas prácticas para la máquina ID ${item.maquina_id}.`
         );
@@ -878,12 +1885,23 @@ async function crearMatricula(
       await insertarMatriculaMaquina(
         client,
         {
-          matricula_id: matriculaId,
-          maquina_id: item.maquina_id,
-          orden: item.orden,
-          es_regalo: item.es_regalo,
+          matricula_id:
+            matriculaId,
+
+          maquina_id:
+            item.maquina_id,
+
+          orden:
+            item.orden,
+
+          es_regalo:
+            item.es_regalo,
+
           horas_asignadas:
-            Number(horasPlan.horas),
+            Number(
+              horasPlan.horas
+            ),
+
           sesiones_totales:
             Number(
               horasPlan.sesiones_totales
@@ -893,7 +1911,7 @@ async function crearMatricula(
     }
 
     // ------------------------------------------------------
-    // GENERAR PRÁCTICAS
+    // PRÁCTICAS
     // ------------------------------------------------------
 
     await crearAsignacionPracticas(
@@ -915,219 +1933,45 @@ async function crearMatricula(
       );
 
     if (!planPrecio) {
+
       throw new Error(
-        'No se encontró un plan de precios activo para este curso.'
+        'No se encontró un plan de precios activo para este curso y configuración de máquinas.'
       );
     }
 
     // ------------------------------------------------------
-    // CONCEPTOS
+    // PLAN FINANCIERO
     // ------------------------------------------------------
 
-    const conceptoMatricula =
-      await obtenerConceptoCobroPorCodigo(
-        client,
-        'MATRICULA'
-      );
+    await crearPlanFinanciero(
+      client,
+      {
+        matriculaId,
+        planPrecio,
+        fechaMatricula:
+          data.fecha_matricula,
+        fechaInicio:
+          data.fecha_inicio || null,
+        fechaFinEstimada:
+          data.fecha_fin_estimada || null,
+        modalidadPago:
+          data.modalidad_pago || 'MENSUAL',
+        nombresMaquinas
+      }
+    );
 
-    const conceptoCuota =
-      await obtenerConceptoCobroPorCodigo(
-        client,
-        'CUOTA'
-      );
-
-    const conceptoCertificacion =
-      await obtenerConceptoCobroPorCodigo(
-        client,
-        'CERTIFICACION'
-      );
-
-    if (
-      !conceptoMatricula ||
-      !conceptoCuota ||
-      !conceptoCertificacion
-    ) {
-      throw new Error(
-        'Faltan conceptos de cobro base.'
-      );
-    }
-
-    // ------------------------------------------------------
-    // DATOS FINANCIEROS
-    // ------------------------------------------------------
-
-    const montoTotal =
-      Number(planPrecio.monto_total || 0);
-
-    const montoMatricula =
-      Number(planPrecio.matricula || 0);
-
-    const montoCertificacion =
-      Number(planPrecio.certificacion || 0);
-
-    const cantidadCuotasBase =
-      Number(planPrecio.cantidad_cuotas || 0);
-
-    const fechaBaseCuotas =
-      data.fecha_inicio ||
-      data.fecha_matricula;
-
-    const modalidadPago =
-      String(
-        data.modalidad_pago || 'MENSUAL'
-      ).toUpperCase();
-
-    const diasEntreCuotas =
-      modalidadPago === 'QUINCENAL'
-        ? 14
-        : 20;
-
-    const cantidadCuotasFinal =
-      modalidadPago === 'QUINCENAL'
-        ? cantidadCuotasBase * 2
-        : cantidadCuotasBase;
-
-    const montoCuotaBase =
-      Number(
-        planPrecio.monto_cuota || 0
-      );
-
-    const montoCuotaFinal =
-      modalidadPago === 'QUINCENAL'
-        ? Number(
-            (
-              montoCuotaBase / 2
-            ).toFixed(2)
-          )
-        : montoCuotaBase;
-
-    // ------------------------------------------------------
-    // PLAN DE PAGOS
-    // ------------------------------------------------------
-
-    const planPagoAlumno =
-      await insertarPlanPagoAlumno(
-        client,
-        {
-          matricula_id: matriculaId,
-          plan_precio_id: planPrecio.id,
-          monto_total: montoTotal,
-          monto_matricula: montoMatricula,
-          monto_certificacion:
-            montoCertificacion,
-          cantidad_cuotas:
-            cantidadCuotasFinal,
-          monto_cuota:
-            montoCuotaFinal,
-          nota_pago:
-            `${planPrecio.nombre} - Máquinas: ${nombresMaquinas.join(', ')}`,
-          modalidad_pago:
-            modalidadPago
-        }
-      );
-
-    // ------------------------------------------------------
-    // MATRÍCULA
-    // ------------------------------------------------------
-
-    if (montoMatricula > 0) {
-
-      await insertarCuota(
-        client,
-        {
-          plan_pago_alumno_id:
-            planPagoAlumno.id,
-          numero_cuota: 0,
-          concepto_id:
-            conceptoMatricula.id,
-          fecha_programada:
-            data.fecha_matricula,
-          fecha_vencimiento:
-            data.fecha_matricula,
-          monto_programado:
-            montoMatricula,
-          observaciones:
-            'Pago de matrícula'
-        }
-      );
-    }
-
-    // ------------------------------------------------------
-    // CUOTAS
-    // ------------------------------------------------------
-
-    for (
-      let i = 1;
-      i <= cantidadCuotasFinal;
-      i++
-    ) {
-
-      const fechaCuota =
-        sumarDias(
-          fechaBaseCuotas,
-          diasEntreCuotas * (i - 1)
-        );
-
-      await insertarCuota(
-        client,
-        {
-          plan_pago_alumno_id:
-            planPagoAlumno.id,
-          numero_cuota: i,
-          concepto_id:
-            conceptoCuota.id,
-          fecha_programada:
-            fechaCuota,
-          fecha_vencimiento:
-            fechaCuota,
-          monto_programado:
-            montoCuotaFinal,
-          observaciones:
-            `Cuota ${i} de ${cantidadCuotasFinal} - ${modalidadPago}`
-        }
-      );
-    }
-
-    // ------------------------------------------------------
-    // CERTIFICACIÓN
-    // ------------------------------------------------------
-
-    if (montoCertificacion > 0) {
-
-      const fechaCertificacion =
-        data.fecha_fin_estimada ||
-        sumarMeses(
-          fechaBaseCuotas,
-          cantidadCuotasBase
-        );
-
-      await insertarCuota(
-        client,
-        {
-          plan_pago_alumno_id:
-            planPagoAlumno.id,
-          numero_cuota: null,
-          concepto_id:
-            conceptoCertificacion.id,
-          fecha_programada:
-            fechaCertificacion,
-          fecha_vencimiento:
-            fechaCertificacion,
-          monto_programado:
-            montoCertificacion,
-          observaciones:
-            'Carpeta y certificación'
-        }
-      );
-    }
-
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
 
     return nuevaMatricula;
 
   } catch (error) {
 
-    await client.query('ROLLBACK');
+    await client.query(
+      'ROLLBACK'
+    );
+
     throw error;
 
   } finally {
@@ -1135,6 +1979,7 @@ async function crearMatricula(
     client.release();
   }
 }
+
 
 // ==========================================================
 // DETERMINAR MÁQUINAS
@@ -1145,12 +1990,17 @@ async function determinarMaquinas(
   plan,
   maquinasSeleccionadas
 ) {
+
   let maquinasAGuardar = [];
 
-  if (plan.permite_eleccion_personalizada) {
+  if (
+    plan.permite_eleccion_personalizada
+  ) {
 
     const seleccionadas =
-      Array.isArray(maquinasSeleccionadas)
+      Array.isArray(
+        maquinasSeleccionadas
+      )
         ? maquinasSeleccionadas
             .map(Number)
             .filter(Boolean)
@@ -1158,8 +2008,11 @@ async function determinarMaquinas(
 
     if (
       seleccionadas.length !==
-      Number(plan.cantidad_maquinas)
+      Number(
+        plan.cantidad_maquinas
+      )
     ) {
+
       throw new Error(
         `Debes seleccionar exactamente ${plan.cantidad_maquinas} máquina(s) para este plan.`
       );
@@ -1167,10 +2020,18 @@ async function determinarMaquinas(
 
     maquinasAGuardar =
       seleccionadas.map(
-        (maquinaId, index) => ({
-          maquina_id: maquinaId,
-          orden: index + 1,
-          es_regalo: false
+        (
+          maquinaId,
+          index
+        ) => ({
+          maquina_id:
+            maquinaId,
+
+          orden:
+            index + 1,
+
+          es_regalo:
+            false
         })
       );
 
@@ -1182,7 +2043,10 @@ async function determinarMaquinas(
         plan.id
       );
 
-    if (!planMaquinas.length) {
+    if (
+      !planMaquinas.length
+    ) {
+
       throw new Error(
         'El plan de curso no tiene máquinas configuradas.'
       );
@@ -1192,11 +2056,19 @@ async function determinarMaquinas(
       planMaquinas.map(
         item => ({
           maquina_id:
-            Number(item.maquina_id),
+            Number(
+              item.maquina_id
+            ),
+
           orden:
-            Number(item.orden),
+            Number(
+              item.orden
+            ),
+
           es_regalo:
-            Boolean(item.es_regalo)
+            Boolean(
+              item.es_regalo
+            )
         })
       );
   }
@@ -1208,7 +2080,8 @@ async function determinarMaquinas(
   const esMultiple =
     String(
       plan.tipo_curso_codigo
-    ).toUpperCase() === 'MULTIPLE';
+    ).toUpperCase() ===
+    'MULTIPLE';
 
   if (esMultiple) {
 
@@ -1219,6 +2092,7 @@ async function determinarMaquinas(
       );
 
     if (!camioneta) {
+
       throw new Error(
         'No se encontró la máquina Camioneta.'
       );
@@ -1227,24 +2101,35 @@ async function determinarMaquinas(
     const yaExiste =
       maquinasAGuardar.some(
         item =>
-          Number(item.maquina_id) ===
-          Number(camioneta.id)
+          Number(
+            item.maquina_id
+          ) ===
+          Number(
+            camioneta.id
+          )
       );
 
     if (!yaExiste) {
 
       maquinasAGuardar.push({
         maquina_id:
-          Number(camioneta.id),
+          Number(
+            camioneta.id
+          ),
+
         orden:
           maquinasAGuardar.length + 1,
-        es_regalo: true
+
+        es_regalo:
+          true
       });
     }
   }
 
   return maquinasAGuardar;
 }
+
+
 // ==========================================================
 // PROCESAR ACTUALIZACIÓN COMPLETA
 // ==========================================================
@@ -1254,86 +2139,110 @@ async function procesarTodo(
   data,
   user
 ) {
-  const client = await pool.connect();
+
+  const client =
+    await pool.connect();
 
   try {
 
-    await client.query('BEGIN');
-
-    // ======================================================
-    // 1. OBTENER MATRÍCULA ACTUAL
-    // ======================================================
-
-    const actualResult = await client.query(
-      `
-      SELECT *
-      FROM matriculas
-      WHERE id = $1
-      LIMIT 1
-      `,
-      [id]
+    await client.query(
+      'BEGIN'
     );
 
-    const actual = actualResult.rows[0];
+    // ======================================================
+    // 1. MATRÍCULA ACTUAL
+    // ======================================================
+
+    const actualResult =
+      await client.query(
+        `
+        SELECT *
+        FROM matriculas
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [id]
+      );
+
+    const actual =
+      actualResult.rows[0];
 
     if (!actual) {
-      throw new Error('Matrícula no encontrada.');
+      throw new Error(
+        'Matrícula no encontrada.'
+      );
     }
 
     // ======================================================
-    // 2. OBTENER ÚNICAMENTE LAS MÁQUINAS ACTIVAS ACTUALES
-    //
-    // IMPORTANTE:
-    //
-    // Las que ya están RETIRADA no participan en la
-    // comparación.
-    //
-    // Esto evita que una máquina retirada anteriormente
-    // recupere su antiguo progreso si vuelve a seleccionarse.
+    // 2. MÁQUINAS ACTIVAS ACTUALES
     // ======================================================
 
-    const maquinasActualesResult = await client.query(
-      `
-      SELECT
-        mm.id,
-        mm.matricula_id,
-        mm.maquina_id,
-        mm.orden,
-        mm.es_regalo,
-        mm.horas_asignadas,
-        mm.sesiones_totales,
-        mm.sesiones_completadas,
-        mm.estado
+    const maquinasActualesResult =
+      await client.query(
+        `
+        SELECT
+          mm.id,
+          mm.matricula_id,
+          mm.maquina_id,
+          mm.orden,
+          mm.es_regalo,
+          mm.horas_asignadas,
+          mm.sesiones_totales,
+          mm.sesiones_completadas,
+          mm.estado
 
-      FROM matricula_maquinas mm
+        FROM matricula_maquinas mm
 
-      WHERE mm.matricula_id = $1
-        AND mm.estado <> 'RETIRADA'
+        WHERE mm.matricula_id = $1
+          AND mm.estado <> 'RETIRADA'
 
-      ORDER BY
-        mm.orden ASC,
-        mm.id ASC
-      `,
-      [id]
-    );
+        ORDER BY
+          mm.orden ASC,
+          mm.id ASC
+        `,
+        [id]
+      );
 
     const maquinasActuales =
       maquinasActualesResult.rows;
 
     // ======================================================
-    // 3. DETECTAR SI EL FRONT ENVIÓ MÁQUINAS
+    // 3. DETECTAR MÁQUINAS ENVIADAS
     // ======================================================
 
     const seEnvioMaquinas =
-      Array.isArray(data.maquinas_seleccionadas);
+      Array.isArray(
+        data.maquinas_seleccionadas
+      );
 
     let maquinasNuevas = [];
 
-    if (seEnvioMaquinas) {
+    // ======================================================
+    // 4. DETECTAR CAMBIO DE PLAN
+    // ======================================================
 
-      // ====================================================
-      // OBTENER PLAN ACTUALIZADO
-      // ====================================================
+    const cambioPlan =
+      Number(
+        actual.plan_curso_id
+      ) !==
+      Number(
+        data.plan_curso_id
+      );
+
+    // ======================================================
+    // 5. DETERMINAR MÁQUINAS NUEVAS
+    //
+    // Si cambia el plan necesitamos recalcularlas aunque
+    // el frontend no haya enviado máquinas.
+    // ======================================================
+
+    const necesitaDeterminarMaquinas =
+      seEnvioMaquinas ||
+      cambioPlan;
+
+    if (
+      necesitaDeterminarMaquinas
+    ) {
 
       const planActualizado =
         await obtenerPlanCursoDetalle(
@@ -1342,72 +2251,107 @@ async function procesarTodo(
         );
 
       if (!planActualizado) {
+
         throw new Error(
           'No se encontró el plan de curso.'
         );
       }
 
-      // ====================================================
-      // DETERMINAR MÁQUINAS
-      //
-      // Aquí también se agrega Camioneta para MULTIPLE.
-      // ====================================================
+      let seleccion;
+
+      if (
+        seEnvioMaquinas
+      ) {
+
+        seleccion =
+          data.maquinas_seleccionadas;
+
+      } else {
+
+        // --------------------------------------------------
+        // Si cambió el plan pero el frontend no envió
+        // máquinas, usamos las activas actuales como
+        // selección inicial.
+        //
+        // Si el nuevo plan exige otra cantidad,
+        // determinarMaquinas lanzará el error correspondiente.
+        // --------------------------------------------------
+
+        seleccion =
+          maquinasActuales.map(
+            item =>
+              Number(
+                item.maquina_id
+              )
+          );
+      }
 
       maquinasNuevas =
         await determinarMaquinas(
           client,
           planActualizado,
-          data.maquinas_seleccionadas
+          seleccion
         );
     }
 
     // ======================================================
-    // 4. DETECTAR CAMBIO DE PLAN
-    // ======================================================
-
-    const cambioPlan =
-      Number(actual.plan_curso_id) !==
-      Number(data.plan_curso_id);
-
-    // ======================================================
-    // 5. DETECTAR CAMBIO DE MÁQUINAS
+    // 6. DETECTAR CAMBIO DE MÁQUINAS
     // ======================================================
 
     let cambioMaquinas = false;
 
-    if (seEnvioMaquinas) {
+    if (
+      necesitaDeterminarMaquinas
+    ) {
 
       const idsActuales =
         maquinasActuales
-          .map(item =>
-            Number(item.maquina_id)
+          .map(
+            item =>
+              Number(
+                item.maquina_id
+              )
           )
-          .sort((a, b) => a - b);
+          .sort(
+            (a, b) =>
+              a - b
+          );
 
       const idsNuevos =
         maquinasNuevas
-          .map(item =>
-            Number(item.maquina_id)
+          .map(
+            item =>
+              Number(
+                item.maquina_id
+              )
           )
-          .sort((a, b) => a - b);
+          .sort(
+            (a, b) =>
+              a - b
+          );
 
       cambioMaquinas =
-        idsActuales.length !== idsNuevos.length ||
+        idsActuales.length !==
+          idsNuevos.length ||
+
         idsActuales.some(
-          (maquinaId, index) =>
-            maquinaId !== idsNuevos[index]
+          (
+            maquinaId,
+            index
+          ) =>
+            maquinaId !==
+            idsNuevos[index]
         );
     }
 
     // ======================================================
-    // 6. ACTUALIZAR DATOS DE LA MATRÍCULA
-    //
-    // Esto no toca máquinas.
+    // 7. ACTUALIZAR MATRÍCULA
     // ======================================================
 
     await client.query(
       `
       UPDATE matriculas
+
       SET
         alumno_id = $1,
         plan_curso_id = $2,
@@ -1416,6 +2360,7 @@ async function procesarTodo(
         fecha_inicio = $5,
         fecha_fin_estimada = $6,
         notas = $7
+
       WHERE id = $8
       `,
       [
@@ -1431,10 +2376,7 @@ async function procesarTodo(
     );
 
     // ======================================================
-    // 7. PROCESAR MÁQUINAS
-    //
-    // SOLO SI EL FRONT ENVIÓ MÁQUINAS Y REALMENTE
-    // CAMBIARON.
+    // 8. PROCESAR MÁQUINAS
     // ======================================================
 
     let maquinasEliminadas = [];
@@ -1446,80 +2388,71 @@ async function procesarTodo(
       cambioMaquinas
     ) {
 
-      // ====================================================
-      // IDS NUEVOS
-      // ====================================================
-
       const idsNuevos =
         new Set(
           maquinasNuevas.map(
             item =>
-              Number(item.maquina_id)
+              Number(
+                item.maquina_id
+              )
           )
         );
-
-      // ====================================================
-      // IDS ACTUALES
-      // ====================================================
 
       const idsActuales =
         new Set(
           maquinasActuales.map(
             item =>
-              Number(item.maquina_id)
+              Number(
+                item.maquina_id
+              )
           )
         );
 
-      // ====================================================
-      // 7.1 MÁQUINAS QUE SE RETIRAN
-      //
-      // Estaban antes y ya no vienen.
-      // ====================================================
+      // ----------------------------------------------------
+      // RETIRADAS
+      // ----------------------------------------------------
 
       maquinasEliminadas =
         maquinasActuales.filter(
           maquina =>
             !idsNuevos.has(
-              Number(maquina.maquina_id)
+              Number(
+                maquina.maquina_id
+              )
             )
         );
 
-      // ====================================================
-      // 7.2 MÁQUINAS QUE SE CONSERVAN
-      //
-      // MISMO registro.
-      //
-      // NO SE BORRA.
-      // NO SE CREA OTRO.
-      // NO SE REINICIAN SESIONES.
-      // NO SE REGENERAN PRÁCTICAS.
-      // ====================================================
+      // ----------------------------------------------------
+      // CONSERVADAS
+      // ----------------------------------------------------
 
       maquinasConservadas =
         maquinasActuales.filter(
           maquina =>
             idsNuevos.has(
-              Number(maquina.maquina_id)
+              Number(
+                maquina.maquina_id
+              )
             )
         );
 
-      // ====================================================
-      // 7.3 MÁQUINAS NUEVAS
-      //
-      // No existían en la matrícula activa anterior.
-      // ====================================================
+      // ----------------------------------------------------
+      // NUEVAS
+      // ----------------------------------------------------
 
       maquinasAgregadas =
         maquinasNuevas.filter(
           nueva =>
             !idsActuales.has(
-              Number(nueva.maquina_id)
+              Number(
+                nueva.maquina_id
+              )
             )
         );
 
-      // ====================================================
-      // 7.4 MARCAR RETIRADAS
-      // ====================================================
+      // ----------------------------------------------------
+      // MARCAR RETIRADAS
+      // ----------------------------------------------------
 
       for (
         const maquina
@@ -1529,8 +2462,9 @@ async function procesarTodo(
         await client.query(
           `
           UPDATE matricula_maquinas
-          SET
-            estado = 'RETIRADA'
+
+          SET estado = 'RETIRADA'
+
           WHERE id = $1
           `,
           [
@@ -1539,13 +2473,9 @@ async function procesarTodo(
         );
       }
 
-      // ====================================================
-      // 7.5 ACTUALIZAR ORDEN DE LAS CONSERVADAS
-      //
-      // SOLO cambia el orden.
-      //
-      // El progreso se mantiene.
-      // ====================================================
+      // ----------------------------------------------------
+      // ACTUALIZAR ORDEN CONSERVADAS
+      // ----------------------------------------------------
 
       for (
         const nueva
@@ -1570,9 +2500,11 @@ async function procesarTodo(
         await client.query(
           `
           UPDATE matricula_maquinas
+
           SET
             orden = $1,
             es_regalo = $2
+
           WHERE id = $3
           `,
           [
@@ -1583,18 +2515,14 @@ async function procesarTodo(
         );
       }
 
-      // ====================================================
-      // 7.6 INSERTAR MÁQUINAS NUEVAS
-      // ====================================================
+      // ----------------------------------------------------
+      // INSERTAR NUEVAS
+      // ----------------------------------------------------
 
       for (
         const nueva
         of maquinasAgregadas
       ) {
-
-        // -----------------------------------------------
-        // OBTENER HORAS DEL PLAN
-        // -----------------------------------------------
 
         const horasPlan =
           await obtenerHorasPlanPorMaquina(
@@ -1604,30 +2532,33 @@ async function procesarTodo(
           );
 
         if (!horasPlan) {
+
           throw new Error(
             `No existe configuración de horas prácticas para la máquina ID ${nueva.maquina_id} en el plan seleccionado.`
           );
         }
 
-        // -----------------------------------------------
-        // INSERTAR
-        // -----------------------------------------------
-
         const nuevaMM =
           await insertarMatriculaMaquina(
             client,
             {
-              matricula_id: id,
+              matricula_id:
+                id,
+
               maquina_id:
                 nueva.maquina_id,
+
               orden:
                 nueva.orden,
+
               es_regalo:
                 nueva.es_regalo,
+
               horas_asignadas:
                 Number(
                   horasPlan.horas
                 ),
+
               sesiones_totales:
                 Number(
                   horasPlan.sesiones_totales
@@ -1635,26 +2566,13 @@ async function procesarTodo(
             }
           );
 
-        // Guardamos referencia para generar prácticas
-        maquinasAgregadas =
-          maquinasAgregadas.map(
-            item =>
-              Number(item.maquina_id) ===
-              Number(nueva.maquina_id)
-                ? {
-                    ...item,
-                    matricula_maquina_id:
-                      nuevaMM.id
-                  }
-                : item
-          );
+        nueva.matricula_maquina_id =
+          nuevaMM.id;
       }
 
-      // ====================================================
-      // 7.7 GENERAR PRÁCTICAS SOLO PARA LAS NUEVAS
-      //
-      // Las máquinas conservadas NO pasan por aquí.
-      // ====================================================
+      // ----------------------------------------------------
+      // GENERAR PRÁCTICAS SOLO PARA NUEVAS
+      // ----------------------------------------------------
 
       for (
         const nueva
@@ -1664,6 +2582,7 @@ async function procesarTodo(
         if (
           !nueva.matricula_maquina_id
         ) {
+
           throw new Error(
             `No se pudo obtener el ID de matrícula-máquina para la máquina ID ${nueva.maquina_id}.`
           );
@@ -1678,164 +2597,308 @@ async function procesarTodo(
     }
 
     // ======================================================
-    // 8. HISTORIAL
+    // 9. DETERMINAR MÁQUINAS PARA PRECIO
+    // ======================================================
+
+    let maquinasParaPrecio;
+
+    if (
+      seEnvioMaquinas
+    ) {
+
+      maquinasParaPrecio =
+        maquinasNuevas;
+
+    } else {
+
+      maquinasParaPrecio =
+        maquinasActuales.map(
+          item => ({
+            maquina_id:
+              Number(
+                item.maquina_id
+              ),
+
+            orden:
+              Number(
+                item.orden
+              ),
+
+            es_regalo:
+              Boolean(
+                item.es_regalo
+              )
+          })
+        );
+    }
+
+    // ======================================================
+    // 10. OBTENER PLAN ACTUALIZADO
+    // ======================================================
+
+    const planActualizado =
+      await obtenerPlanCursoDetalle(
+        client,
+        data.plan_curso_id
+      );
+
+    if (!planActualizado) {
+
+      throw new Error(
+        'No se encontró el plan de curso actualizado.'
+      );
+    }
+
+    // ======================================================
+    // 11. OBTENER PRECIO NUEVO
+    // ======================================================
+
+    const planPrecio =
+      await obtenerPlanPrecioVigente(
+        client,
+        data.plan_curso_id,
+        data.fecha_matricula,
+        maquinasParaPrecio,
+        planActualizado.tipo_curso_codigo
+      );
+
+    if (!planPrecio) {
+
+      throw new Error(
+        'No se encontró un plan de precios activo para la configuración seleccionada.'
+      );
+    }
+
+    // ======================================================
+    // 12. OBTENER PLAN FINANCIERO ACTUAL
+    // ======================================================
+
+    const planPagoActual =
+      await obtenerPlanPagoAlumno(
+        client,
+        id
+      );
+
+    const modalidadNueva =
+      String(
+        data.modalidad_pago ||
+        (
+          planPagoActual &&
+          planPagoActual.modalidad_pago
+        ) ||
+        'MENSUAL'
+      ).toUpperCase();
+
+    // ======================================================
+    // 13. DETECTAR CAMBIO FINANCIERO
+    //
+    // MUY IMPORTANTE:
+    //
+    // No solo miramos cambio de plan.
+    //
+    // También detectamos:
+    //
+    // Individual Excavadora -> Individual Cargador
+    //
+    // Doble normal -> Doble tractor
+    //
+    // Mensual -> Quincenal
+    // ======================================================
+
+    const cambioPrecio =
+      !planPagoActual ||
+      Number(
+        planPagoActual.plan_precio_id
+      ) !==
+      Number(
+        planPrecio.id
+      );
+
+    const cambioModalidad =
+      !planPagoActual ||
+      String(
+        planPagoActual.modalidad_pago ||
+        'MENSUAL'
+      ).toUpperCase() !==
+      modalidadNueva;
+
+    const cambioFinanciero =
+      cambioPrecio ||
+      cambioModalidad;
+
+    // ======================================================
+    // 14. ACTUALIZAR / CREAR PLAN FINANCIERO
+    // ======================================================
+
+    if (
+      cambioFinanciero
+    ) {
+
+      await recalcularPlanFinanciero(
+        client,
+        {
+          matriculaId:
+            id,
+
+          planPagoActual,
+
+          planPrecio,
+
+          fechaMatricula:
+            data.fecha_matricula,
+
+          fechaInicio:
+            data.fecha_inicio || null,
+
+          fechaFinEstimada:
+            data.fecha_fin_estimada || null,
+
+          modalidadPago:
+            modalidadNueva,
+
+          nombresMaquinas:
+            maquinasParaPrecio.map(
+              item =>
+                item.maquina_id
+            ).length > 0
+              ? await obtenerNombresMaquinas(
+                  client,
+                  maquinasParaPrecio
+                )
+              : []
+        }
+      );
+    }
+
+    // ======================================================
+    // 15. HISTORIAL
     // ======================================================
 
     let descripcion =
       'Se actualizó la matrícula.';
 
-    if (cambioPlan) {
+    if (
+      cambioPlan
+    ) {
+
       descripcion +=
         ' Se cambió el plan de curso.';
     }
 
-    // ====================================================
+    if (
+      cambioFinanciero
+    ) {
+
+      descripcion +=
+        ` Se actualizó el plan financiero al precio "${planPrecio.nombre}" con modalidad ${modalidadNueva}.`;
+    }
+
+    // ------------------------------------------------------
     // HISTORIAL DE MÁQUINAS
-    // ====================================================
+    // ------------------------------------------------------
 
     if (
       seEnvioMaquinas &&
       cambioMaquinas
     ) {
 
-      // -----------------------------------------------
-      // NOMBRES DE MÁQUINAS CONSERVADAS
-      // -----------------------------------------------
-
       if (
         maquinasConservadas.length > 0
       ) {
 
-        const idsConservadas =
-          maquinasConservadas.map(
-            item =>
-              Number(item.maquina_id)
-          );
-
-        const nombresConservadasResult =
-          await client.query(
-            `
-            SELECT nombre
-            FROM maquinas
-            WHERE id = ANY($1::int[])
-            ORDER BY nombre
-            `,
-            [idsConservadas]
-          );
-
         const nombresConservadas =
-          nombresConservadasResult.rows
-            .map(row => row.nombre)
-            .join(', ');
+          await obtenerNombresMaquinas(
+            client,
+            maquinasConservadas
+          );
 
-        if (nombresConservadas) {
+        if (
+          nombresConservadas.length
+        ) {
+
           descripcion +=
-            ` Máquinas conservadas: ${nombresConservadas}.`;
+            ` Máquinas conservadas: ${nombresConservadas.join(', ')}.`;
         }
       }
-
-      // -----------------------------------------------
-      // NOMBRES DE MÁQUINAS NUEVAS
-      // -----------------------------------------------
 
       if (
         maquinasAgregadas.length > 0
       ) {
 
-        const idsAgregadas =
-          maquinasAgregadas.map(
-            item =>
-              Number(item.maquina_id)
-          );
-
-        const nombresAgregadasResult =
-          await client.query(
-            `
-            SELECT nombre
-            FROM maquinas
-            WHERE id = ANY($1::int[])
-            ORDER BY nombre
-            `,
-            [idsAgregadas]
-          );
-
         const nombresAgregadas =
-          nombresAgregadasResult.rows
-            .map(row => row.nombre)
-            .join(', ');
+          await obtenerNombresMaquinas(
+            client,
+            maquinasAgregadas
+          );
 
-        if (nombresAgregadas) {
+        if (
+          nombresAgregadas.length
+        ) {
+
           descripcion +=
-            ` Máquinas agregadas: ${nombresAgregadas}.`;
+            ` Máquinas agregadas: ${nombresAgregadas.join(', ')}.`;
         }
       }
-
-      // -----------------------------------------------
-      // NOMBRES DE MÁQUINAS RETIRADAS
-      // -----------------------------------------------
 
       if (
         maquinasEliminadas.length > 0
       ) {
 
-        const idsRetiradas =
-          maquinasEliminadas.map(
-            item =>
-              Number(item.maquina_id)
-          );
-
-        const nombresRetiradasResult =
-          await client.query(
-            `
-            SELECT nombre
-            FROM maquinas
-            WHERE id = ANY($1::int[])
-            ORDER BY nombre
-            `,
-            [idsRetiradas]
-          );
-
         const nombresRetiradas =
-          nombresRetiradasResult.rows
-            .map(row => row.nombre)
-            .join(', ');
+          await obtenerNombresMaquinas(
+            client,
+            maquinasEliminadas
+          );
 
-        if (nombresRetiradas) {
+        if (
+          nombresRetiradas.length
+        ) {
+
           descripcion +=
-            ` Máquinas retiradas: ${nombresRetiradas}.`;
+            ` Máquinas retiradas: ${nombresRetiradas.join(', ')}.`;
         }
       }
     }
 
     // ======================================================
-    // 9. REGISTRAR HISTORIAL
+    // 16. HISTORIAL
     // ======================================================
 
     await registrarHistorial(
       client,
       {
-        matricula_id: id,
-        accion: 'ACTUALIZACION',
+        matricula_id:
+          id,
+
+        accion:
+          'ACTUALIZACION',
+
         descripcion
       },
       user
     );
 
     // ======================================================
-    // 10. COMMIT
+    // 17. COMMIT
     // ======================================================
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
 
     // ======================================================
-    // 11. DEVOLVER MATRÍCULA ACTUALIZADA
+    // 18. DEVOLVER MATRÍCULA
     // ======================================================
 
-    return await obtenerMatriculaPorId(id);
+    return await obtenerMatriculaPorId(
+      id
+    );
 
   } catch (error) {
 
-    await client.query('ROLLBACK');
+    await client.query(
+      'ROLLBACK'
+    );
 
     throw error;
 
@@ -1844,6 +2907,54 @@ async function procesarTodo(
     client.release();
   }
 }
+
+
+// ==========================================================
+// OBTENER NOMBRES DE MÁQUINAS
+// ==========================================================
+
+async function obtenerNombresMaquinas(
+  client,
+  maquinas
+) {
+
+  const ids =
+    maquinas
+      .map(
+        item =>
+          Number(
+            item.maquina_id
+          )
+      )
+      .filter(Boolean);
+
+  if (!ids.length) {
+    return [];
+  }
+
+  const result =
+    await client.query(
+      `
+      SELECT
+        id,
+        nombre
+
+      FROM maquinas
+
+      WHERE id = ANY($1::int[])
+
+      ORDER BY nombre
+      `,
+      [ids]
+    );
+
+  return result.rows.map(
+    row =>
+      row.nombre
+  );
+}
+
+
 // ==========================================================
 // REGENERAR TODO
 // ==========================================================
@@ -1853,6 +2964,7 @@ async function regenerarTodo(
   matriculaId,
   data
 ) {
+
   const plan =
     await obtenerPlanCursoDetalle(
       client,
@@ -1860,6 +2972,7 @@ async function regenerarTodo(
     );
 
   if (!plan) {
+
     throw new Error(
       'Plan no encontrado.'
     );
@@ -1880,31 +2993,20 @@ async function regenerarTodo(
   // NOMBRES
   // --------------------------------------------------------
 
-  const nombresMaquinas = [];
+  const nombresMaquinas =
+    await obtenerNombresMaquinas(
+      client,
+      maquinasAGuardar
+    );
 
   // --------------------------------------------------------
   // CREAR MATRÍCULA-MÁQUINAS
   // --------------------------------------------------------
 
   for (
-    const item of maquinasAGuardar
+    const item
+    of maquinasAGuardar
   ) {
-
-    const maquinaResult =
-      await client.query(
-        `
-        SELECT nombre
-        FROM maquinas
-        WHERE id = $1
-        `,
-        [item.maquina_id]
-      );
-
-    if (maquinaResult.rows[0]) {
-      nombresMaquinas.push(
-        maquinaResult.rows[0].nombre
-      );
-    }
 
     const horasPlan =
       await obtenerHorasPlanPorMaquina(
@@ -1914,6 +3016,7 @@ async function regenerarTodo(
       );
 
     if (!horasPlan) {
+
       throw new Error(
         `No existe configuración de horas prácticas para la máquina ID ${item.maquina_id} en el plan seleccionado.`
       );
@@ -1922,12 +3025,23 @@ async function regenerarTodo(
     await insertarMatriculaMaquina(
       client,
       {
-        matricula_id: matriculaId,
-        maquina_id: item.maquina_id,
-        orden: item.orden,
-        es_regalo: item.es_regalo,
+        matricula_id:
+          matriculaId,
+
+        maquina_id:
+          item.maquina_id,
+
+        orden:
+          item.orden,
+
+        es_regalo:
+          item.es_regalo,
+
         horas_asignadas:
-          Number(horasPlan.horas),
+          Number(
+            horasPlan.horas
+          ),
+
         sesiones_totales:
           Number(
             horasPlan.sesiones_totales
@@ -1959,220 +3073,34 @@ async function regenerarTodo(
     );
 
   if (!planPrecio) {
+
     throw new Error(
       'No hay precio activo para este curso.'
     );
   }
 
   // --------------------------------------------------------
-  // CONCEPTOS
+  // PLAN FINANCIERO
   // --------------------------------------------------------
 
-  const conceptoMatricula =
-    await obtenerConceptoCobroPorCodigo(
-      client,
-      'MATRICULA'
-    );
-
-  const conceptoCuota =
-    await obtenerConceptoCobroPorCodigo(
-      client,
-      'CUOTA'
-    );
-
-  const conceptoCertificacion =
-    await obtenerConceptoCobroPorCodigo(
-      client,
-      'CERTIFICACION'
-    );
-
-  if (
-    !conceptoMatricula ||
-    !conceptoCuota ||
-    !conceptoCertificacion
-  ) {
-    throw new Error(
-      'Faltan conceptos base de cobro.'
-    );
-  }
-
-  // --------------------------------------------------------
-  // DATOS
-  // --------------------------------------------------------
-
-  const montoTotal =
-    Number(
-      planPrecio.monto_total || 0
-    );
-
-  const montoMatricula =
-    Number(
-      planPrecio.matricula || 0
-    );
-
-  const montoCertificacion =
-    Number(
-      planPrecio.certificacion || 0
-    );
-
-  const cantidadCuotasBase =
-    Number(
-      planPrecio.cantidad_cuotas || 0
-    );
-
-  const montoCuotaBase =
-    Number(
-      planPrecio.monto_cuota || 0
-    );
-
-  const fechaBaseCuotas =
-    data.fecha_inicio ||
-    data.fecha_matricula;
-
-  const modalidadPago =
-    String(
-      data.modalidad_pago || 'MENSUAL'
-    ).toUpperCase();
-
-  const diasEntreCuotas =
-    modalidadPago === 'QUINCENAL'
-      ? 14
-      : 20;
-
-  const cantidadCuotasFinal =
-    modalidadPago === 'QUINCENAL'
-      ? cantidadCuotasBase * 2
-      : cantidadCuotasBase;
-
-  const montoCuotaFinal =
-    modalidadPago === 'QUINCENAL'
-      ? Number(
-          (
-            montoCuotaBase / 2
-          ).toFixed(2)
-        )
-      : montoCuotaBase;
-
-  // --------------------------------------------------------
-  // CREAR PLAN DE PAGOS
-  // --------------------------------------------------------
-
-  const planPago =
-    await insertarPlanPagoAlumno(
-      client,
-      {
-        matricula_id: matriculaId,
-        plan_precio_id: planPrecio.id,
-        monto_total: montoTotal,
-        monto_matricula: montoMatricula,
-        monto_certificacion:
-          montoCertificacion,
-        cantidad_cuotas:
-          cantidadCuotasFinal,
-        monto_cuota:
-          montoCuotaFinal,
-        nota_pago:
-          `${planPrecio.nombre} - Máquinas: ${nombresMaquinas.join(', ')}`,
-        modalidad_pago:
-          modalidadPago
-      }
-    );
-
-  // --------------------------------------------------------
-  // MATRÍCULA
-  // --------------------------------------------------------
-
-  if (montoMatricula > 0) {
-
-    await insertarCuota(
-      client,
-      {
-        plan_pago_alumno_id:
-          planPago.id,
-        numero_cuota: 0,
-        concepto_id:
-          conceptoMatricula.id,
-        fecha_programada:
-          data.fecha_matricula,
-        fecha_vencimiento:
-          data.fecha_matricula,
-        monto_programado:
-          montoMatricula,
-        observaciones:
-          'Pago de matrícula'
-      }
-    );
-  }
-
-  // --------------------------------------------------------
-  // CUOTAS
-  // --------------------------------------------------------
-
-  for (
-    let i = 1;
-    i <= cantidadCuotasFinal;
-    i++
-  ) {
-
-    const fechaCuota =
-      sumarDias(
-        fechaBaseCuotas,
-        diasEntreCuotas * (i - 1)
-      );
-
-    await insertarCuota(
-      client,
-      {
-        plan_pago_alumno_id:
-          planPago.id,
-        numero_cuota: i,
-        concepto_id:
-          conceptoCuota.id,
-        fecha_programada:
-          fechaCuota,
-        fecha_vencimiento:
-          fechaCuota,
-        monto_programado:
-          montoCuotaFinal,
-        observaciones:
-          `Cuota ${i} de ${cantidadCuotasFinal} - ${modalidadPago}`
-      }
-    );
-  }
-
-  // --------------------------------------------------------
-  // CERTIFICACIÓN
-  // --------------------------------------------------------
-
-  if (montoCertificacion > 0) {
-
-    const fechaCertificacion =
-      data.fecha_fin_estimada ||
-      sumarMeses(
-        fechaBaseCuotas,
-        cantidadCuotasBase
-      );
-
-    await insertarCuota(
-      client,
-      {
-        plan_pago_alumno_id:
-          planPago.id,
-        numero_cuota: null,
-        concepto_id:
-          conceptoCertificacion.id,
-        fecha_programada:
-          fechaCertificacion,
-        fecha_vencimiento:
-          fechaCertificacion,
-        monto_programado:
-          montoCertificacion,
-        observaciones:
-          'Carpeta y certificación'
-      }
-    );
-  }
+  await crearPlanFinanciero(
+    client,
+    {
+      matriculaId,
+      planPrecio,
+      fechaMatricula:
+        data.fecha_matricula,
+      fechaInicio:
+        data.fecha_inicio || null,
+      fechaFinEstimada:
+        data.fecha_fin_estimada || null,
+      modalidadPago:
+        data.modalidad_pago || 'MENSUAL',
+      nombresMaquinas
+    }
+  );
 }
+
 
 // ==========================================================
 // RESUMEN FINANCIERO
@@ -2181,32 +3109,37 @@ async function regenerarTodo(
 async function obtenerResumenFinanzasMatricula(
   matriculaId
 ) {
-  const result = await pool.query(
-    `
-    SELECT
-      ppa.id,
-      ppa.matricula_id,
-      ppa.plan_precio_id,
-      ppa.monto_total,
-      ppa.monto_matricula,
-      ppa.monto_certificacion,
-      ppa.cantidad_cuotas,
-      ppa.monto_cuota,
-      ppa.modalidad_pago,
-      ppa.nota_pago,
-      ppa.fecha_creacion
 
-    FROM planes_pago_alumno ppa
+  const result =
+    await pool.query(
+      `
+      SELECT
+        ppa.id,
+        ppa.matricula_id,
+        ppa.plan_precio_id,
+        ppa.monto_total,
+        ppa.monto_matricula,
+        ppa.monto_certificacion,
+        ppa.cantidad_cuotas,
+        ppa.monto_cuota,
+        ppa.modalidad_pago,
+        ppa.nota_pago,
+        ppa.fecha_creacion
 
-    WHERE ppa.matricula_id = $1
+      FROM planes_pago_alumno ppa
 
-    LIMIT 1
-    `,
-    [matriculaId]
-  );
+      WHERE ppa.matricula_id = $1
+
+      ORDER BY ppa.id DESC
+
+      LIMIT 1
+      `,
+      [matriculaId]
+    );
 
   return result.rows[0] || null;
 }
+
 
 // ==========================================================
 // LISTAR CUOTAS
@@ -2215,56 +3148,63 @@ async function obtenerResumenFinanzasMatricula(
 async function listarCuotasDeMatricula(
   matriculaId
 ) {
-  const result = await pool.query(
-    `
-    SELECT
-      c.id,
-      c.plan_pago_alumno_id,
-      c.numero_cuota,
-      c.concepto_id,
-      cc.codigo AS concepto_codigo,
-      cc.nombre AS concepto_nombre,
-      c.fecha_programada,
-      c.fecha_vencimiento,
-      c.monto_programado,
-      c.monto_pagado,
-      c.saldo_pendiente,
-      c.estado,
-      c.observaciones
 
-    FROM cuotas c
+  const result =
+    await pool.query(
+      `
+      SELECT
+        c.id,
+        c.plan_pago_alumno_id,
+        c.numero_cuota,
+        c.concepto_id,
 
-    INNER JOIN planes_pago_alumno ppa
-      ON ppa.id = c.plan_pago_alumno_id
+        cc.codigo AS concepto_codigo,
+        cc.nombre AS concepto_nombre,
 
-    INNER JOIN conceptos_cobro cc
-      ON cc.id = c.concepto_id
+        c.fecha_programada,
+        c.fecha_vencimiento,
+        c.monto_programado,
+        c.monto_pagado,
+        c.saldo_pendiente,
+        c.estado,
+        c.observaciones
 
-    WHERE ppa.matricula_id = $1
+      FROM cuotas c
 
-    ORDER BY
-      CASE
-        WHEN cc.codigo = 'MATRICULA'
-          THEN 0
+      INNER JOIN planes_pago_alumno ppa
+        ON ppa.id =
+           c.plan_pago_alumno_id
 
-        WHEN cc.codigo = 'CUOTA'
-          THEN 1
+      INNER JOIN conceptos_cobro cc
+        ON cc.id =
+           c.concepto_id
 
-        WHEN cc.codigo = 'CERTIFICACION'
-          THEN 2
+      WHERE ppa.matricula_id = $1
 
-        ELSE 3
-      END,
+      ORDER BY
+        CASE
+          WHEN cc.codigo = 'MATRICULA'
+            THEN 0
 
-      c.numero_cuota ASC NULLS LAST,
-      c.fecha_vencimiento ASC,
-      c.id ASC
-    `,
-    [matriculaId]
-  );
+          WHEN cc.codigo = 'CUOTA'
+            THEN 1
+
+          WHEN cc.codigo = 'CERTIFICACION'
+            THEN 2
+
+          ELSE 3
+        END,
+
+        c.numero_cuota ASC NULLS LAST,
+        c.fecha_vencimiento ASC,
+        c.id ASC
+      `,
+      [matriculaId]
+    );
 
   return result.rows;
 }
+
 
 // ==========================================================
 // HISTORIAL
@@ -2275,9 +3215,13 @@ async function registrarHistorial(
   data,
   user
 ) {
+
   const nombreUsuario =
     user &&
-    (user.nombres || user.apellidos)
+    (
+      user.nombres ||
+      user.apellidos
+    )
       ? `${user.nombres || ''} ${user.apellidos || ''}`.trim()
       : 'sistema';
 
@@ -2306,6 +3250,7 @@ async function registrarHistorial(
   );
 }
 
+
 // ==========================================================
 // SUMAR MESES
 // ==========================================================
@@ -2314,11 +3259,15 @@ function sumarMeses(
   fechaBase,
   meses
 ) {
+
   const [
     anioStr,
     mesStr,
     diaStr
-  ] = String(fechaBase).split('-');
+  ] =
+    String(
+      fechaBase
+    ).split('-');
 
   const fecha =
     new Date(
@@ -2332,6 +3281,7 @@ function sumarMeses(
       fecha.getTime()
     )
   ) {
+
     throw new Error(
       'Fecha inválida para calcular cuotas.'
     );
@@ -2357,6 +3307,7 @@ function sumarMeses(
   return `${anio}-${mes}-${dia}`;
 }
 
+
 // ==========================================================
 // SUMAR DÍAS
 // ==========================================================
@@ -2365,11 +3316,15 @@ function sumarDias(
   fechaBase,
   dias
 ) {
+
   const [
     anioStr,
     mesStr,
     diaStr
-  ] = String(fechaBase).split('-');
+  ] =
+    String(
+      fechaBase
+    ).split('-');
 
   const fecha =
     new Date(
@@ -2383,6 +3338,7 @@ function sumarDias(
       fecha.getTime()
     )
   ) {
+
     throw new Error(
       'Fecha inválida para calcular cuotas.'
     );
@@ -2408,6 +3364,7 @@ function sumarDias(
   return `${anio}-${mes}-${dia}`;
 }
 
+
 // ==========================================================
 // OBTENER HISTORIAL
 // ==========================================================
@@ -2415,21 +3372,28 @@ function sumarDias(
 async function obtenerHistorial(
   matriculaId
 ) {
-  const result = await pool.query(
-    `
-    SELECT *
-    FROM matricula_historial
-    WHERE matricula_id = $1
-    ORDER BY fecha DESC
-    `,
-    [matriculaId]
-  );
+
+  const result =
+    await pool.query(
+      `
+      SELECT *
+      FROM matricula_historial
+
+      WHERE matricula_id = $1
+
+      ORDER BY fecha DESC
+      `,
+      [matriculaId]
+    );
 
   return result.rows;
 }
 
+
 // ==========================================================
 // CREAR PLAN DE PAGO MANUAL
+//
+// ESTE NO SE MODIFICA CON LA LÓGICA AUTOMÁTICA.
 // ==========================================================
 
 async function crearPlanPagoManual({
@@ -2441,12 +3405,15 @@ async function crearPlanPagoManual({
   cuotas = [],
   nota_pago = null
 }) {
+
   const client =
     await pool.connect();
 
   try {
 
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
     // ------------------------------------------------------
     // MATRÍCULA
@@ -2457,7 +3424,9 @@ async function crearPlanPagoManual({
         `
         SELECT *
         FROM matriculas
+
         WHERE id = $1
+
         LIMIT 1
         `,
         [matricula_id]
@@ -2467,6 +3436,7 @@ async function crearPlanPagoManual({
       matriculaRes.rows[0];
 
     if (!matricula) {
+
       throw new Error(
         'Matrícula no encontrada.'
       );
@@ -2480,8 +3450,11 @@ async function crearPlanPagoManual({
       await client.query(
         `
         SELECT id
+
         FROM planes_pago_alumno
+
         WHERE matricula_id = $1
+
         LIMIT 1
         `,
         [matricula_id]
@@ -2490,6 +3463,7 @@ async function crearPlanPagoManual({
     if (
       existePlan.rows.length > 0
     ) {
+
       throw new Error(
         'La matrícula ya tiene un plan de pagos.'
       );
@@ -2503,6 +3477,7 @@ async function crearPlanPagoManual({
       !Array.isArray(cuotas) ||
       cuotas.length === 0
     ) {
+
       throw new Error(
         'Debe enviar al menos una cuota.'
       );
@@ -2518,6 +3493,7 @@ async function crearPlanPagoManual({
         SELECT
           id,
           codigo
+
         FROM conceptos_cobro
         `
       );
@@ -2528,9 +3504,11 @@ async function crearPlanPagoManual({
       const concepto
       of conceptosRes.rows
     ) {
+
       conceptos[
         concepto.codigo
-      ] = concepto.id;
+      ] =
+        concepto.id;
     }
 
     if (
@@ -2538,6 +3516,7 @@ async function crearPlanPagoManual({
       !conceptos.CUOTA ||
       !conceptos.CERTIFICACION
     ) {
+
       throw new Error(
         'Faltan conceptos de cobro base.'
       );
@@ -2554,9 +3533,14 @@ async function crearPlanPagoManual({
       Number(
         (
           cuotas.reduce(
-            (acc, item) =>
+            (
+              acc,
+              item
+            ) =>
               acc +
-              Number(item.monto || 0),
+              Number(
+                item.monto || 0
+              ),
             0
           ) /
           cantidad_cuotas
@@ -2616,7 +3600,9 @@ async function crearPlanPagoManual({
     // ------------------------------------------------------
 
     if (
-      Number(monto_matricula) > 0
+      Number(
+        monto_matricula
+      ) > 0
     ) {
 
       await client.query(
@@ -2660,7 +3646,8 @@ async function crearPlanPagoManual({
     // ------------------------------------------------------
 
     for (
-      const cuota of cuotas
+      const cuota
+      of cuotas
     ) {
 
       await client.query(
@@ -2708,7 +3695,9 @@ async function crearPlanPagoManual({
     // ------------------------------------------------------
 
     if (
-      Number(monto_certificacion) > 0
+      Number(
+        monto_certificacion
+      ) > 0
     ) {
 
       const ultimaFecha =
@@ -2753,18 +3742,24 @@ async function crearPlanPagoManual({
       );
     }
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
 
     return {
       mensaje:
         'Plan manual creado correctamente',
+
       plan_pago_alumno_id:
         planPago.id
     };
 
   } catch (error) {
 
-    await client.query('ROLLBACK');
+    await client.query(
+      'ROLLBACK'
+    );
+
     throw error;
 
   } finally {
@@ -2773,22 +3768,36 @@ async function crearPlanPagoManual({
   }
 }
 
+
 // ==========================================================
 // EXPORTS
 // ==========================================================
 
 module.exports = {
+
   listarMatriculas,
+
   obtenerMatriculaPorId,
+
   crearMatricula,
+
   obtenerEstadoPorCodigo,
+
   actualizarEstadoMatricula,
+
   actualizarMatricula,
+
   obtenerDetalleMatricula,
+
   listarMaquinasDeMatricula,
+
   obtenerResumenFinanzasMatricula,
+
   listarCuotasDeMatricula,
+
   procesarTodo,
+
   obtenerHistorial,
+
   crearPlanPagoManual
 };
