@@ -134,13 +134,17 @@ async function importarDesdeSheets() {
                 else if (!isNaN(Number(fechaTexto))) {
 
                     const excelDate = Number(fechaTexto);
-
-                    const date = new Date(
-                        (excelDate - 25569) * 86400 * 1000
-                    );
-
+                    
+                    const ms = (excelDate - 25569) * 86400 * 1000;
+                    
+                    const date = new Date(ms);
+                    
                     fechaRegistro =
-                    date.toISOString().slice(0,10);
+                    `${date.getUTCFullYear()}-${
+                    String(date.getUTCMonth()+1).padStart(2,"0")
+                    }-${
+                    String(date.getUTCDate()).padStart(2,"0")
+                    }`;
 
                 }
 
