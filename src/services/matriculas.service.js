@@ -2129,7 +2129,6 @@ async function determinarMaquinas(
   return maquinasAGuardar;
 }
 
-
 // ==========================================================
 // PROCESAR ACTUALIZACIÓN COMPLETA
 // ==========================================================
@@ -2139,33 +2138,27 @@ async function procesarTodo(
   data,
   user
 ) {
-
-  const client =
-    await pool.connect();
+  const client = await pool.connect();
 
   try {
 
-    await client.query(
-      'BEGIN'
+    await client.query('BEGIN');
+
+    // ======================================================
+    // 1. OBTENER MATRÍCULA ACTUAL
+    // ======================================================
+
+    const actualResult = await client.query(
+      `
+      SELECT *
+      FROM matriculas
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [id]
     );
 
-    // ======================================================
-    // 1. MATRÍCULA ACTUAL
-    // ======================================================
-
-    const actualResult =
-      await client.query(
-        `
-        SELECT *
-        FROM matriculas
-        WHERE id = $1
-        LIMIT 1
-        `,
-        [id]
-      );
-
-    const actual =
-      actualResult.rows[0];
+    const actual = actualResult.rows[0];
 
     if (!actual) {
       throw new Error(
@@ -2174,10 +2167,19 @@ async function procesarTodo(
     }
 
     // ======================================================
-    // 2. MÁQUINAS ACTIVAS ACTUALES
+    // 2. OBTENER TODAS LAS MÁQUINAS HISTÓRICAS
+    //
+    // IMPORTANTE:
+    //
+    // NO filtramos RETIRADA aquí.
+    //
+    // Necesitamos saber si una máquina ya existió alguna
+    // vez para evitar el UNIQUE:
+    //
+    // (matricula_id, maquina_id)
     // ======================================================
 
-    const maquinasActualesResult =
+    const todasMaquinasResult =
       await client.query(
         `
         SELECT
@@ -2194,7 +2196,6 @@ async function procesarTodo(
         FROM matricula_maquinas mm
 
         WHERE mm.matricula_id = $1
-          AND mm.estado <> 'RETIRADA'
 
         ORDER BY
           mm.orden ASC,
@@ -2203,11 +2204,25 @@ async function procesarTodo(
         [id]
       );
 
-    const maquinasActuales =
-      maquinasActualesResult.rows;
+    const todasMaquinas =
+      todasMaquinasResult.rows;
 
     // ======================================================
-    // 3. DETECTAR MÁQUINAS ENVIADAS
+    // 3. OBTENER SOLO LAS MÁQUINAS ACTIVAS
+    //
+    // Estas son las que realmente tiene actualmente
+    // la matrícula.
+    // ======================================================
+
+    const maquinasActuales =
+      todasMaquinas.filter(
+        maquina =>
+          String(maquina.estado)
+            .toUpperCase() !== 'RETIRADA'
+      );
+
+    // ======================================================
+    // 4. DETECTAR SI EL FRONT ENVIÓ MÁQUINAS
     // ======================================================
 
     const seEnvioMaquinas =
@@ -2218,31 +2233,10 @@ async function procesarTodo(
     let maquinasNuevas = [];
 
     // ======================================================
-    // 4. DETECTAR CAMBIO DE PLAN
-    // ======================================================
-
-    const cambioPlan =
-      Number(
-        actual.plan_curso_id
-      ) !==
-      Number(
-        data.plan_curso_id
-      );
-
-    // ======================================================
     // 5. DETERMINAR MÁQUINAS NUEVAS
-    //
-    // Si cambia el plan necesitamos recalcularlas aunque
-    // el frontend no haya enviado máquinas.
     // ======================================================
 
-    const necesitaDeterminarMaquinas =
-      seEnvioMaquinas ||
-      cambioPlan;
-
-    if (
-      necesitaDeterminarMaquinas
-    ) {
+    if (seEnvioMaquinas) {
 
       const planActualizado =
         await obtenerPlanCursoDetalle(
@@ -2251,83 +2245,53 @@ async function procesarTodo(
         );
 
       if (!planActualizado) {
-
         throw new Error(
           'No se encontró el plan de curso.'
         );
-      }
-
-      let seleccion;
-
-      if (
-        seEnvioMaquinas
-      ) {
-
-        seleccion =
-          data.maquinas_seleccionadas;
-
-      } else {
-
-        // --------------------------------------------------
-        // Si cambió el plan pero el frontend no envió
-        // máquinas, usamos las activas actuales como
-        // selección inicial.
-        //
-        // Si el nuevo plan exige otra cantidad,
-        // determinarMaquinas lanzará el error correspondiente.
-        // --------------------------------------------------
-
-        seleccion =
-          maquinasActuales.map(
-            item =>
-              Number(
-                item.maquina_id
-              )
-          );
       }
 
       maquinasNuevas =
         await determinarMaquinas(
           client,
           planActualizado,
-          seleccion
+          data.maquinas_seleccionadas
         );
     }
 
     // ======================================================
-    // 6. DETECTAR CAMBIO DE MÁQUINAS
+    // 6. DETECTAR CAMBIO DE PLAN
+    // ======================================================
+
+    const cambioPlan =
+      Number(actual.plan_curso_id) !==
+      Number(data.plan_curso_id);
+
+    // ======================================================
+    // 7. DETECTAR CAMBIO DE MÁQUINAS
     // ======================================================
 
     let cambioMaquinas = false;
 
-    if (
-      necesitaDeterminarMaquinas
-    ) {
+    if (seEnvioMaquinas) {
 
       const idsActuales =
         maquinasActuales
           .map(
             item =>
-              Number(
-                item.maquina_id
-              )
+              Number(item.maquina_id)
           )
           .sort(
-            (a, b) =>
-              a - b
+            (a, b) => a - b
           );
 
       const idsNuevos =
         maquinasNuevas
           .map(
             item =>
-              Number(
-                item.maquina_id
-              )
+              Number(item.maquina_id)
           )
           .sort(
-            (a, b) =>
-              a - b
+            (a, b) => a - b
           );
 
       cambioMaquinas =
@@ -2335,23 +2299,19 @@ async function procesarTodo(
           idsNuevos.length ||
 
         idsActuales.some(
-          (
-            maquinaId,
-            index
-          ) =>
+          (maquinaId, index) =>
             maquinaId !==
             idsNuevos[index]
         );
     }
 
     // ======================================================
-    // 7. ACTUALIZAR MATRÍCULA
+    // 8. ACTUALIZAR DATOS DE MATRÍCULA
     // ======================================================
 
     await client.query(
       `
       UPDATE matriculas
-
       SET
         alumno_id = $1,
         plan_curso_id = $2,
@@ -2360,7 +2320,6 @@ async function procesarTodo(
         fecha_inicio = $5,
         fecha_fin_estimada = $6,
         notas = $7
-
       WHERE id = $8
       `,
       [
@@ -2376,41 +2335,52 @@ async function procesarTodo(
     );
 
     // ======================================================
-    // 8. PROCESAR MÁQUINAS
+    // 9. VARIABLES DE HISTORIAL
     // ======================================================
 
     let maquinasEliminadas = [];
     let maquinasConservadas = [];
     let maquinasAgregadas = [];
+    let maquinasReactivadas = [];
+
+    // ======================================================
+    // 10. PROCESAR MÁQUINAS
+    // ======================================================
 
     if (
       seEnvioMaquinas &&
       cambioMaquinas
     ) {
 
+      // ====================================================
+      // IDS NUEVOS
+      // ====================================================
+
       const idsNuevos =
         new Set(
           maquinasNuevas.map(
             item =>
-              Number(
-                item.maquina_id
-              )
+              Number(item.maquina_id)
           )
         );
+
+      // ====================================================
+      // IDS ACTIVOS ACTUALES
+      // ====================================================
 
       const idsActuales =
         new Set(
           maquinasActuales.map(
             item =>
-              Number(
-                item.maquina_id
-              )
+              Number(item.maquina_id)
           )
         );
 
-      // ----------------------------------------------------
-      // RETIRADAS
-      // ----------------------------------------------------
+      // ====================================================
+      // 10.1 MÁQUINAS QUE SE RETIRAN
+      //
+      // Estaban activas y ya no vienen.
+      // ====================================================
 
       maquinasEliminadas =
         maquinasActuales.filter(
@@ -2422,9 +2392,11 @@ async function procesarTodo(
             )
         );
 
-      // ----------------------------------------------------
-      // CONSERVADAS
-      // ----------------------------------------------------
+      // ====================================================
+      // 10.2 MÁQUINAS CONSERVADAS
+      //
+      // Siguen seleccionadas.
+      // ====================================================
 
       maquinasConservadas =
         maquinasActuales.filter(
@@ -2436,23 +2408,9 @@ async function procesarTodo(
             )
         );
 
-      // ----------------------------------------------------
-      // NUEVAS
-      // ----------------------------------------------------
-
-      maquinasAgregadas =
-        maquinasNuevas.filter(
-          nueva =>
-            !idsActuales.has(
-              Number(
-                nueva.maquina_id
-              )
-            )
-        );
-
-      // ----------------------------------------------------
-      // MARCAR RETIRADAS
-      // ----------------------------------------------------
+      // ====================================================
+      // 10.3 MARCAR COMO RETIRADAS
+      // ====================================================
 
       for (
         const maquina
@@ -2462,9 +2420,8 @@ async function procesarTodo(
         await client.query(
           `
           UPDATE matricula_maquinas
-
-          SET estado = 'RETIRADA'
-
+          SET
+            estado = 'RETIRADA'
           WHERE id = $1
           `,
           [
@@ -2473,9 +2430,22 @@ async function procesarTodo(
         );
       }
 
-      // ----------------------------------------------------
-      // ACTUALIZAR ORDEN CONSERVADAS
-      // ----------------------------------------------------
+      // ====================================================
+      // 10.4 ACTUALIZAR ORDEN DE CONSERVADAS
+      //
+      // IMPORTANTE:
+      //
+      // NO modificamos:
+      //
+      // - sesiones_completadas
+      // - horas_asignadas
+      // - sesiones_totales
+      //
+      // Solo:
+      //
+      // - orden
+      // - es_regalo
+      // ====================================================
 
       for (
         const nueva
@@ -2500,11 +2470,9 @@ async function procesarTodo(
         await client.query(
           `
           UPDATE matricula_maquinas
-
           SET
             orden = $1,
             es_regalo = $2
-
           WHERE id = $3
           `,
           [
@@ -2515,14 +2483,139 @@ async function procesarTodo(
         );
       }
 
-      // ----------------------------------------------------
-      // INSERTAR NUEVAS
-      // ----------------------------------------------------
+      // ====================================================
+      // 10.5 PROCESAR CADA MÁQUINA NUEVA
+      //
+      // Aquí tenemos tres posibilidades:
+      //
+      // A) Ya está activa
+      //    → no insertar.
+      //
+      // B) Existe pero está RETIRADA
+      //    → reactivar.
+      //
+      // C) Nunca existió
+      //    → insertar.
+      // ====================================================
 
       for (
         const nueva
-        of maquinasAgregadas
+        of maquinasNuevas
       ) {
+
+        // --------------------------------------------------
+        // BUSCAR CUALQUIER REGISTRO HISTÓRICO
+        // --------------------------------------------------
+
+        const existenteResult =
+          await client.query(
+            `
+            SELECT
+              id,
+              matricula_id,
+              maquina_id,
+              orden,
+              es_regalo,
+              horas_asignadas,
+              sesiones_totales,
+              sesiones_completadas,
+              estado
+
+            FROM matricula_maquinas
+
+            WHERE matricula_id = $1
+              AND maquina_id = $2
+
+            LIMIT 1
+            `,
+            [
+              id,
+              nueva.maquina_id
+            ]
+          );
+
+        const existente =
+          existenteResult.rows[0];
+
+        // ==================================================
+        // CASO A/B: YA EXISTE
+        // ==================================================
+
+        if (existente) {
+
+          // -----------------------------------------------
+          // A. YA ESTÁ ACTIVA
+          // -----------------------------------------------
+
+          if (
+            String(existente.estado)
+              .toUpperCase() !==
+            'RETIRADA'
+          ) {
+
+            // Ya fue procesada como conservada.
+            // Solo guardamos referencia para prácticas
+            // si fuera necesario.
+
+            maquinasAgregadas.push({
+              ...nueva,
+              matricula_maquina_id:
+                existente.id,
+              ya_existia: true
+            });
+
+            continue;
+          }
+
+          // -----------------------------------------------
+          // B. ESTABA RETIRADA
+          //
+          // REACTIVAMOS EL MISMO REGISTRO.
+          //
+          // NO INSERTAMOS.
+          // -----------------------------------------------
+
+          const horasPlan =
+            await obtenerHorasPlanPorMaquina(
+              client,
+              data.plan_curso_id,
+              nueva.maquina_id
+            );
+
+          if (!horasPlan) {
+            throw new Error(
+              `No existe configuración de horas prácticas para la máquina ID ${nueva.maquina_id} en el plan seleccionado.`
+            );
+          }
+
+          await client.query(
+            `
+            UPDATE matricula_maquinas
+            SET
+              orden = $1,
+              es_regalo = $2,
+              estado = 'PENDIENTE'
+            WHERE id = $3
+            `,
+            [
+              nueva.orden,
+              nueva.es_regalo,
+              existente.id
+            ]
+          );
+
+          maquinasReactivadas.push({
+            ...nueva,
+            matricula_maquina_id:
+              existente.id
+          });
+
+          continue;
+        }
+
+        // ==================================================
+        // CASO C: REALMENTE NUNCA EXISTIÓ
+        // ==================================================
 
         const horasPlan =
           await obtenerHorasPlanPorMaquina(
@@ -2532,7 +2625,6 @@ async function procesarTodo(
           );
 
         if (!horasPlan) {
-
           throw new Error(
             `No existe configuración de horas prácticas para la máquina ID ${nueva.maquina_id} en el plan seleccionado.`
           );
@@ -2542,23 +2634,17 @@ async function procesarTodo(
           await insertarMatriculaMaquina(
             client,
             {
-              matricula_id:
-                id,
-
+              matricula_id: id,
               maquina_id:
                 nueva.maquina_id,
-
               orden:
                 nueva.orden,
-
               es_regalo:
                 nueva.es_regalo,
-
               horas_asignadas:
                 Number(
                   horasPlan.horas
                 ),
-
               sesiones_totales:
                 Number(
                   horasPlan.sesiones_totales
@@ -2566,13 +2652,27 @@ async function procesarTodo(
             }
           );
 
-        nueva.matricula_maquina_id =
-          nuevaMM.id;
+        maquinasAgregadas.push({
+          ...nueva,
+          matricula_maquina_id:
+            nuevaMM.id
+        });
       }
 
-      // ----------------------------------------------------
-      // GENERAR PRÁCTICAS SOLO PARA NUEVAS
-      // ----------------------------------------------------
+      // ====================================================
+      // 10.6 GENERAR PRÁCTICAS
+      //
+      // SOLO para:
+      //
+      // - máquinas realmente nuevas
+      //
+      // NO para:
+      //
+      // - conservadas
+      // - reactivadas
+      //
+      // porque esas ya pueden tener prácticas históricas.
+      // ====================================================
 
       for (
         const nueva
@@ -2580,9 +2680,14 @@ async function procesarTodo(
       ) {
 
         if (
+          nueva.ya_existia
+        ) {
+          continue;
+        }
+
+        if (
           !nueva.matricula_maquina_id
         ) {
-
           throw new Error(
             `No se pudo obtener el ID de matrícula-máquina para la máquina ID ${nueva.maquina_id}.`
           );
@@ -2597,302 +2702,210 @@ async function procesarTodo(
     }
 
     // ======================================================
-    // 9. DETERMINAR MÁQUINAS PARA PRECIO
+    // 11. CAMBIO FINANCIERO
+    //
+    // IMPORTANTE:
+    //
+    // Por ahora SOLO dejamos detectado el cambio.
+    //
+    // Aquí es donde debe entrar la conciliación de cuotas:
+    //
+    // PAGADAS    → conservar
+    // PENDIENTES → recalcular
+    // SOBRANTES  → anular
+    // NUEVAS     → insertar
+    //
     // ======================================================
 
-    let maquinasParaPrecio;
+    if (cambioPlan) {
 
-    if (
-      seEnvioMaquinas
-    ) {
+      // ----------------------------------------------------
+      // AQUÍ NO SE BORRA EL PLAN DE PAGOS ACTUAL.
+      //
+      // La conciliación financiera se debe hacer
+      // respetando los pagos realizados.
+      // ----------------------------------------------------
 
-      maquinasParaPrecio =
-        maquinasNuevas;
-
-    } else {
-
-      maquinasParaPrecio =
-        maquinasActuales.map(
-          item => ({
-            maquina_id:
-              Number(
-                item.maquina_id
-              ),
-
-            orden:
-              Number(
-                item.orden
-              ),
-
-            es_regalo:
-              Boolean(
-                item.es_regalo
-              )
-          })
-        );
+      // Esta parte se implementará con la función
+      // de conciliación de cuotas.
     }
 
     // ======================================================
-    // 10. OBTENER PLAN ACTUALIZADO
-    // ======================================================
-
-    const planActualizado =
-      await obtenerPlanCursoDetalle(
-        client,
-        data.plan_curso_id
-      );
-
-    if (!planActualizado) {
-
-      throw new Error(
-        'No se encontró el plan de curso actualizado.'
-      );
-    }
-
-    // ======================================================
-    // 11. OBTENER PRECIO NUEVO
-    // ======================================================
-
-    const planPrecio =
-      await obtenerPlanPrecioVigente(
-        client,
-        data.plan_curso_id,
-        data.fecha_matricula,
-        maquinasParaPrecio,
-        planActualizado.tipo_curso_codigo
-      );
-
-    if (!planPrecio) {
-
-      throw new Error(
-        'No se encontró un plan de precios activo para la configuración seleccionada.'
-      );
-    }
-
-    // ======================================================
-    // 12. OBTENER PLAN FINANCIERO ACTUAL
-    // ======================================================
-
-    const planPagoActual =
-      await obtenerPlanPagoAlumno(
-        client,
-        id
-      );
-
-    const modalidadNueva =
-      String(
-        data.modalidad_pago ||
-        (
-          planPagoActual &&
-          planPagoActual.modalidad_pago
-        ) ||
-        'MENSUAL'
-      ).toUpperCase();
-
-    // ======================================================
-    // 13. DETECTAR CAMBIO FINANCIERO
-    //
-    // MUY IMPORTANTE:
-    //
-    // No solo miramos cambio de plan.
-    //
-    // También detectamos:
-    //
-    // Individual Excavadora -> Individual Cargador
-    //
-    // Doble normal -> Doble tractor
-    //
-    // Mensual -> Quincenal
-    // ======================================================
-
-    const cambioPrecio =
-      !planPagoActual ||
-      Number(
-        planPagoActual.plan_precio_id
-      ) !==
-      Number(
-        planPrecio.id
-      );
-
-    const cambioModalidad =
-      !planPagoActual ||
-      String(
-        planPagoActual.modalidad_pago ||
-        'MENSUAL'
-      ).toUpperCase() !==
-      modalidadNueva;
-
-    const cambioFinanciero =
-      cambioPrecio ||
-      cambioModalidad;
-
-    // ======================================================
-    // 14. ACTUALIZAR / CREAR PLAN FINANCIERO
-    // ======================================================
-
-    if (
-      cambioFinanciero
-    ) {
-
-      await recalcularPlanFinanciero(
-        client,
-        {
-          matriculaId:
-            id,
-
-          planPagoActual,
-
-          planPrecio,
-
-          fechaMatricula:
-            data.fecha_matricula,
-
-          fechaInicio:
-            data.fecha_inicio || null,
-
-          fechaFinEstimada:
-            data.fecha_fin_estimada || null,
-
-          modalidadPago:
-            modalidadNueva,
-
-          nombresMaquinas:
-            maquinasParaPrecio.map(
-              item =>
-                item.maquina_id
-            ).length > 0
-              ? await obtenerNombresMaquinas(
-                  client,
-                  maquinasParaPrecio
-                )
-              : []
-        }
-      );
-    }
-
-    // ======================================================
-    // 15. HISTORIAL
+    // 12. HISTORIAL
     // ======================================================
 
     let descripcion =
       'Se actualizó la matrícula.';
 
-    if (
-      cambioPlan
-    ) {
-
+    if (cambioPlan) {
       descripcion +=
         ' Se cambió el plan de curso.';
     }
 
-    if (
-      cambioFinanciero
-    ) {
-
-      descripcion +=
-        ` Se actualizó el plan financiero al precio "${planPrecio.nombre}" con modalidad ${modalidadNueva}.`;
-    }
-
-    // ------------------------------------------------------
+    // ====================================================
     // HISTORIAL DE MÁQUINAS
-    // ------------------------------------------------------
+    // ====================================================
 
     if (
       seEnvioMaquinas &&
       cambioMaquinas
     ) {
 
+      // --------------------------------------------------
+      // CONSERVADAS
+      // --------------------------------------------------
+
       if (
         maquinasConservadas.length > 0
       ) {
 
-        const nombresConservadas =
-          await obtenerNombresMaquinas(
-            client,
-            maquinasConservadas
+        const idsConservadas =
+          maquinasConservadas.map(
+            item =>
+              Number(
+                item.maquina_id
+              )
           );
 
-        if (
-          nombresConservadas.length
-        ) {
+        const nombresResult =
+          await client.query(
+            `
+            SELECT nombre
+            FROM maquinas
+            WHERE id = ANY($1::int[])
+            ORDER BY nombre
+            `,
+            [
+              idsConservadas
+            ]
+          );
 
+        const nombres =
+          nombresResult.rows
+            .map(
+              row => row.nombre
+            )
+            .join(', ');
+
+        if (nombres) {
           descripcion +=
-            ` Máquinas conservadas: ${nombresConservadas.join(', ')}.`;
+            ` Máquinas conservadas: ${nombres}.`;
         }
       }
+
+      // --------------------------------------------------
+      // NUEVAS
+      // --------------------------------------------------
+
+      const idsNuevas = [
+        ...maquinasAgregadas,
+        ...maquinasReactivadas
+      ]
+        .map(
+          item =>
+            Number(
+              item.maquina_id
+            )
+        );
 
       if (
-        maquinasAgregadas.length > 0
+        idsNuevas.length > 0
       ) {
 
-        const nombresAgregadas =
-          await obtenerNombresMaquinas(
-            client,
-            maquinasAgregadas
+        const nombresResult =
+          await client.query(
+            `
+            SELECT nombre
+            FROM maquinas
+            WHERE id = ANY($1::int[])
+            ORDER BY nombre
+            `,
+            [
+              idsNuevas
+            ]
           );
 
-        if (
-          nombresAgregadas.length
-        ) {
+        const nombres =
+          nombresResult.rows
+            .map(
+              row => row.nombre
+            )
+            .join(', ');
 
+        if (nombres) {
           descripcion +=
-            ` Máquinas agregadas: ${nombresAgregadas.join(', ')}.`;
+            ` Máquinas agregadas/reactivadas: ${nombres}.`;
         }
       }
+
+      // --------------------------------------------------
+      // RETIRADAS
+      // --------------------------------------------------
 
       if (
         maquinasEliminadas.length > 0
       ) {
 
-        const nombresRetiradas =
-          await obtenerNombresMaquinas(
-            client,
-            maquinasEliminadas
+        const idsRetiradas =
+          maquinasEliminadas.map(
+            item =>
+              Number(
+                item.maquina_id
+              )
           );
 
-        if (
-          nombresRetiradas.length
-        ) {
+        const nombresResult =
+          await client.query(
+            `
+            SELECT nombre
+            FROM maquinas
+            WHERE id = ANY($1::int[])
+            ORDER BY nombre
+            `,
+            [
+              idsRetiradas
+            ]
+          );
 
+        const nombres =
+          nombresResult.rows
+            .map(
+              row => row.nombre
+            )
+            .join(', ');
+
+        if (nombres) {
           descripcion +=
-            ` Máquinas retiradas: ${nombresRetiradas.join(', ')}.`;
+            ` Máquinas retiradas: ${nombres}.`;
         }
       }
     }
 
     // ======================================================
-    // 16. HISTORIAL
+    // 13. REGISTRAR HISTORIAL
     // ======================================================
 
     await registrarHistorial(
       client,
       {
-        matricula_id:
-          id,
-
-        accion:
-          'ACTUALIZACION',
-
+        matricula_id: id,
+        accion: 'ACTUALIZACION',
         descripcion
       },
       user
     );
 
     // ======================================================
-    // 17. COMMIT
+    // 14. COMMIT
     // ======================================================
 
-    await client.query(
-      'COMMIT'
-    );
+    await client.query('COMMIT');
 
     // ======================================================
-    // 18. DEVOLVER MATRÍCULA
+    // 15. DEVOLVER MATRÍCULA ACTUALIZADA
     // ======================================================
 
-    return await obtenerMatriculaPorId(
-      id
-    );
+    return await obtenerMatriculaPorId(id);
 
   } catch (error) {
 
@@ -2907,7 +2920,6 @@ async function procesarTodo(
     client.release();
   }
 }
-
 
 // ==========================================================
 // OBTENER NOMBRES DE MÁQUINAS
