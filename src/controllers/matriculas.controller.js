@@ -156,28 +156,72 @@ async function cambiarEstado(req, res) {
     const { codigo_estado } = req.body;
 
     if (!codigo_estado || String(codigo_estado).trim() === '') {
-      return res.status(400).json({ ok: false, message: 'El código de estado es obligatorio.' });
+      return res.status(400).json({
+        ok: false,
+        message: 'El código de estado es obligatorio.'
+      });
     }
 
-    const matricula = await matriculasService.obtenerMatriculaPorId(id);
+    // ------------------------------------------------------
+    // VERIFICAR MATRÍCULA
+    // ------------------------------------------------------
+
+    const matricula =
+      await matriculasService.obtenerMatriculaPorId(id);
+
     if (!matricula) {
-      return res.status(404).json({ ok: false, message: 'Matrícula no encontrada.' });
+      return res.status(404).json({
+        ok: false,
+        message: 'Matrícula no encontrada.'
+      });
     }
 
-    const estado = await matriculasService.obtenerEstadoPorCodigo(codigo_estado);
+    // ------------------------------------------------------
+    // OBTENER ESTADO
+    // ------------------------------------------------------
+
+    const estado =
+      await matriculasService.obtenerEstadoPorCodigo(
+        codigo_estado
+      );
+
     if (!estado) {
-      return res.status(404).json({ ok: false, message: 'Estado no encontrado.' });
+      return res.status(404).json({
+        ok: false,
+        message: 'Estado no encontrado.'
+      });
     }
 
-    // PASO CORREGIDO: Pasamos el usuario como 3er argumento explícito
-    const usuarioFormateado = obtenerNombreUsuario(req);
-    const actualizada = await matriculasService.procesarTodo(id, req.body, req.user);
-    res.json({ ok: true, message: `La matrícula ahora está en estado ${estado.nombre}.`, data: actualizada });
+    // ------------------------------------------------------
+    // CAMBIAR SOLO EL ESTADO
+    // ------------------------------------------------------
+
+    const actualizada =
+      await matriculasService.actualizarEstadoMatricula(
+        id,
+        estado.id,
+        req.user
+      );
+
+    res.json({
+      ok: true,
+      message: `La matrícula ahora está en estado ${estado.nombre}.`,
+      data: actualizada
+    });
+
   } catch (error) {
-    console.error('Error al cambiar estado de matrícula:', error);
-    res.status(500).json({ ok: false, message: 'Error al cambiar estado de matrícula.' });
+    console.error(
+      'Error al cambiar estado de matrícula:',
+      error
+    );
+
+    res.status(500).json({
+      ok: false,
+      message: 'Error al cambiar estado de matrícula.'
+    });
   }
 }
+
 async function listarMaquinas(req, res) {
   try {
     const { id } = req.params;
