@@ -64,7 +64,6 @@ async function importarDesdeSheets() {
     const errores = [];
 
 
-
     const respuesta = await axios.get(SHEETS_URL);
 
 
@@ -78,324 +77,246 @@ async function importarDesdeSheets() {
 
 
 
-    for(const row of filas){
+const omitidosDetalle = [];
 
+for (const row of filas) {
 
-        try {
+    try {
 
+        const dni = String(row["DNI"] ?? "").trim();
 
+        const alumno = String(
+            row["APELLIDOS Y NOMBRES"] ?? ""
+        ).trim();
 
-            const dni = String(
-                row["DNI"] ?? ""
-            ).trim();
+        const curso = String(
+            row["Curso/ Equipos "] ??
+            row["Curso/ Equipos"] ??
+            ""
+        ).trim();
 
+        if (!dni || !curso) {
 
+            omitidos++;
 
-            const alumno = String(
-                row["APELLIDOS Y NOMBRES"] ?? ""
-            ).trim();
+            omitidosDetalle.push({
+                dni,
+                curso,
+                motivo: "DNI o Curso vacío"
+            });
 
+            console.log(
+                `⏭ Omitido ${dni} - DNI o Curso vacío`
+            );
 
+            continue;
 
-            const curso = String(
-                row["Curso/ Equipos "] ??
-                row["Curso/ Equipos"] ??
-                ""
-            ).trim();
+        }
 
+        //=========================
+        // FECHA
+        //=========================
 
+        let fechaRegistro = null;
 
-            if(!dni || !curso){
+        const fechaTexto = String(
+            row["FECHA "] ??
+            row["FECHA"] ??
+            ""
+        ).trim();
 
-                omitidos++;
-                continue;
+        if (fechaTexto) {
+
+            if (fechaTexto.includes("/")) {
+
+                const partes = fechaTexto.split("/");
+
+                if (partes.length === 3) {
+
+                    fechaRegistro =
+                        `${partes[2]}-${partes[1]}-${partes[0]}`;
+
+                }
 
             }
 
+        }
 
+        //=========================
+        // MONTOS
+        //=========================
 
+        const montoIndicado = Number(
+            String(row["MONTO INDICADO"] ?? "0")
+                .replace(/\./g, "")
+                .replace(",", ".")
+        ) || 0;
 
-            const montoIndicado = Number(
-                String(row["MONTO INDICADO"] ?? "0")
-                .replace(/\./g,"")
-                .replace(",",".")
-            ) || 0;
+        const montoCancelado = Number(
+            String(row["MONTO CANCELADO"] ?? "0")
+                .replace(/\./g, "")
+                .replace(",", ".")
+        ) || 0;
 
+        const saldo = Number(
+            String(row["SALDO PENDIENTE"] ?? "0")
+                .replace(/\./g, "")
+                .replace(",", ".")
+        ) || 0;
 
-
-
-            const montoCancelado = Number(
-                String(row["MONTO CANCELADO"] ?? "0")
-                .replace(/\./g,"")
-                .replace(",",".")
-            ) || 0;
-
-
-
-
-            const saldo = Number(
-                String(row["SALDO PENDIENTE"] ?? "0")
-                .replace(/\./g,"")
-                .replace(",",".")
-            ) || 0;
-
-
-
-
-
-
-            const existe = await pool.query(`
-
-                SELECT id
-                FROM homologaciones
-                WHERE dni=$1
-                AND curso_equipo=$2
-
+        const existe = await pool.query(
+            `
+            SELECT id
+            FROM homologaciones
+            WHERE dni=$1
+            AND curso_equipo=$2
             `,
-            [
-                dni,
-                curso
-            ]);
+            [dni, curso]
+        );
 
+        if (existe.rows.length > 0) {
 
-
-
-
-
-            if(existe.rows.length > 0){
-
-
-
-                await pool.query(`
-
-                    UPDATE homologaciones
-
-                    SET
-
+            await pool.query(
+                `
+                UPDATE homologaciones
+                SET
                     alumno=$1,
                     fecha_registro=$2,
                     vendedor=$3,
                     celular=$4,
-
                     monto_total=$5,
                     monto_pagado=$6,
                     monto_indicado=$7,
-
                     saldo_pendiente=$8,
-
                     estado_pago=$9,
                     estado_documento=$10,
-
                     observaciones=$11,
                     observaciones_admin=$12
-
-
-                    WHERE id=$13
-
-
+                WHERE id=$13
                 `,
                 [
-
                     alumno,
-
-                    row["FECHA"] || null,
-
+                    fechaRegistro,
                     row["Vendedor"] || "",
-
                     row["CELULAR"] || "",
-
-
                     montoIndicado,
-
                     montoCancelado,
-
                     montoIndicado,
-
-
                     saldo,
-
-
                     row["ESTADO DE PAGO"] || "",
-
                     row["ESTADO DEL DOCUMENTO"] || "",
-
-
                     row["OBSERVACIONES"] || "",
-
                     row["OBSERVACIONES ADMIN"] || "",
-
-
                     existe.rows[0].id
+                ]
+            );
 
-                ]);
+            actualizados++;
 
+            console.log(`↻ Actualizado ${dni}`);
 
+        } else {
 
-                actualizados++;
-
-
-            }
-
-            else {
-
-
-
-                await pool.query(`
-
-                    INSERT INTO homologaciones
-                    (
-
+            await pool.query(
+                `
+                INSERT INTO homologaciones
+                (
                     alumno,
-
                     alumno_id,
-
                     tipo_homologacion,
-
                     monto_total,
-
                     monto_pagado,
-
                     fecha_registro,
-
                     estado,
-
                     observaciones,
-
                     dni,
-
                     celular,
-
                     vendedor,
-
                     curso_equipo,
-
                     monto_indicado,
-
                     saldo_pendiente,
-
                     estado_pago,
-
                     estado_documento,
-
                     fecha_envio,
-
                     observaciones_admin
-
-                    )
-
-
-                    VALUES
-
-                    (
-
+                )
+                VALUES
+                (
                     $1,
                     NULL,
                     'INDIVIDUAL',
-
                     $2,
                     $3,
                     $4,
-
                     'REGISTRADO',
-
                     $5,
                     $6,
                     $7,
-
                     $8,
                     $9,
-
                     $10,
                     $11,
-
                     $12,
                     $13,
-
                     NULL,
-
                     $14
-
-                    )
-
-
+                )
                 `,
                 [
-
                     alumno,
-
                     montoIndicado,
-
                     montoCancelado,
-
-                    row["FECHA"] || null,
-
+                    fechaRegistro,
                     row["OBSERVACIONES"] || "",
-
                     dni,
-
                     row["CELULAR"] || "",
-
                     row["Vendedor"] || "",
-
                     curso,
-
-
                     montoIndicado,
-
                     saldo,
-
-
                     row["ESTADO DE PAGO"] || "",
-
                     row["ESTADO DEL DOCUMENTO"] || "",
-
-
                     row["OBSERVACIONES ADMIN"] || ""
+                ]
+            );
 
-                ]);
+            creados++;
 
-
-
-                creados++;
-
-
-            }
-
-
-
-        }
-        catch(err){
-
-
-            errores.push({
-
-                dni: row["DNI"],
-
-                mensaje: err.message
-
-            });
-
+            console.log(`✓ Creado ${dni}`);
 
         }
 
+    } catch (err) {
+
+        errores.push({
+            dni: row["DNI"],
+            mensaje: err.message
+        });
+
+        console.log(
+            `❌ Error ${row["DNI"]}: ${err.message}`
+        );
 
     }
 
+}
 
 
-    return {
+return {
 
-        ok:true,
+    ok: true,
 
-        creados,
+    creados,
 
-        actualizados,
+    actualizados,
 
-        omitidos,
+    omitidos,
 
-        errores
+    omitidosDetalle,
 
-    };
+    errores
+
+};
 
 
 }
