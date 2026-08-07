@@ -432,27 +432,6 @@ async function importarDesdeSheets() {
 
 }
 
-return {
-
-    ok: true,
-
-    creados,
-
-    actualizados,
-
-    omitidos,
-
-    omitidosDetalle,
-
-    errores
-
-};
-
-
-}
-
-
-
 
 
 
