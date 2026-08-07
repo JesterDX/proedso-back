@@ -363,43 +363,39 @@ async function obtenerDetalleMatricula(
 // LISTAR MÁQUINAS DE MATRÍCULA
 // ==========================================================
 
-async function listarMaquinasDeMatricula(
-  matriculaId
-) {
+async function listarMaquinasDeMatricula(matriculaId) {
+  const result = await pool.query(
+    `
+    SELECT
+      mm.id,
+      mm.matricula_id,
+      mm.maquina_id,
+      mm.orden,
+      mm.es_regalo,
+      mm.horas_asignadas,
+      mm.sesiones_totales,
+      mm.sesiones_completadas,
+      mm.estado,
 
-  const result =
-    await pool.query(
-      `
-      SELECT
-        mm.id,
-        mm.matricula_id,
-        mm.maquina_id,
-        mm.orden,
-        mm.es_regalo,
-        mm.horas_asignadas,
-        mm.sesiones_totales,
-        mm.sesiones_completadas,
-        mm.estado,
+      m.nombre AS maquina_nombre
 
-        m.nombre AS maquina_nombre
+    FROM matricula_maquinas mm
 
-      FROM matricula_maquinas mm
+    INNER JOIN maquinas m
+      ON m.id = mm.maquina_id
 
-      INNER JOIN maquinas m
-        ON m.id = mm.maquina_id
+    WHERE mm.matricula_id = $1
+      AND mm.estado = 'PENDIENTE'
 
-      WHERE mm.matricula_id = $1
-
-      ORDER BY
-        mm.orden ASC,
-        mm.id ASC
-      `,
-      [matriculaId]
-    );
+    ORDER BY
+      mm.orden ASC,
+      mm.id ASC
+    `,
+    [matriculaId]
+  );
 
   return result.rows;
 }
-
 
 // ==========================================================
 // OBTENER PLAN DE CURSO
