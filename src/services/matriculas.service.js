@@ -2321,6 +2321,7 @@ async function crearMatricula(
   }
 }
 
+
 // ==========================================================
 // PROCESAR ACTUALIZACIÓN COMPLETA
 // ==========================================================
@@ -2547,16 +2548,57 @@ async function procesarTodo(
       );
 
     // ======================================================
-    // 11. DETERMINAR CAMBIO FINANCIERO
+    // 11. DETECTAR CAMBIOS DE FECHAS
+    // ======================================================
+
+    const fechaMatriculaActual =
+      normalizarFecha(
+        actual.fecha_matricula
+      );
+
+    const fechaInicioActual =
+      normalizarFecha(
+        actual.fecha_inicio
+      );
+
+    const fechaFinEstimadaActual =
+      normalizarFecha(
+        actual.fecha_fin_estimada
+      );
+
+    const cambioFechaMatricula =
+      fechaMatriculaActual !==
+      fechaMatricula;
+
+    const cambioFechaInicio =
+      fechaInicioActual !==
+      fechaInicio;
+
+    const cambioFechaFinEstimada =
+      fechaFinEstimadaActual !==
+      fechaFinEstimada;
+
+    const cambioFechas =
+      cambioFechaMatricula ||
+      cambioFechaInicio ||
+      cambioFechaFinEstimada;
+
+    // ======================================================
+    // 12. DETERMINAR CAMBIO FINANCIERO
+    //
+    // IMPORTANTE:
+    // Las fechas ahora también provocan
+    // regeneración del cronograma.
     // ======================================================
 
     const cambioFinanciero =
       cambioPlan ||
       cambioMaquinas ||
-      cambioModalidad;
+      cambioModalidad ||
+      cambioFechas;
 
     // ======================================================
-    // 12. ACTUALIZAR DATOS DE MATRÍCULA
+    // 13. ACTUALIZAR DATOS DE MATRÍCULA
     // ======================================================
 
     await client.query(
@@ -2587,7 +2629,7 @@ async function procesarTodo(
     );
 
     // ======================================================
-    // 13. VARIABLES
+    // 14. VARIABLES
     // ======================================================
 
     let maquinasEliminadas = [];
@@ -2596,7 +2638,7 @@ async function procesarTodo(
     let maquinasReactivadas = [];
 
     // ======================================================
-    // 14. PROCESAR MÁQUINAS
+    // 15. PROCESAR MÁQUINAS
     // ======================================================
 
     if (
@@ -2903,9 +2945,15 @@ async function procesarTodo(
     }
 
     // ======================================================
-    // 15. RECALCULAR PLAN FINANCIERO
+    // 16. RECALCULAR PLAN FINANCIERO
     //
-    // SOLO SI REALMENTE CAMBIÓ ALGO FINANCIERO.
+    // Se recalcula cuando cambia:
+    // - Plan
+    // - Máquinas
+    // - Modalidad
+    // - Fecha matrícula
+    // - Fecha inicio
+    // - Fecha fin estimada
     // ======================================================
 
     if (cambioFinanciero) {
@@ -2955,7 +3003,7 @@ async function procesarTodo(
         );
 
       // ----------------------------------------------------
-      // SI EXISTE PLAN, SOLO RECALCULA SI NO HAY PAGOS.
+      // SI EXISTE PLAN, RECALCULAR SI NO HAY PAGOS.
       // ----------------------------------------------------
 
       if (planPagoActual) {
@@ -3009,7 +3057,7 @@ async function procesarTodo(
     }
 
     // ======================================================
-    // 16. HISTORIAL
+    // 17. HISTORIAL
     // ======================================================
 
     let descripcion =
@@ -3025,6 +3073,24 @@ async function procesarTodo(
 
       descripcion +=
         ` Se cambió la modalidad de pago de ${modalidadActual} a ${modalidadNueva}.`;
+    }
+
+    if (cambioFechaMatricula) {
+
+      descripcion +=
+        ' Se cambió la fecha de matrícula.';
+    }
+
+    if (cambioFechaInicio) {
+
+      descripcion +=
+        ' Se cambió la fecha de inicio.';
+    }
+
+    if (cambioFechaFinEstimada) {
+
+      descripcion +=
+        ' Se cambió la fecha fin estimada.';
     }
 
     // ------------------------------------------------------
@@ -3173,7 +3239,7 @@ async function procesarTodo(
     }
 
     // ======================================================
-    // 17. HISTORIAL
+    // 18. REGISTRAR HISTORIAL
     // ======================================================
 
     await registrarHistorial(
@@ -3191,7 +3257,7 @@ async function procesarTodo(
     );
 
     // ======================================================
-    // 18. COMMIT
+    // 19. COMMIT
     // ======================================================
 
     await client.query(
@@ -3199,7 +3265,7 @@ async function procesarTodo(
     );
 
     // ======================================================
-    // 19. DEVOLVER MATRÍCULA
+    // 20. DEVOLVER MATRÍCULA ACTUALIZADA
     // ======================================================
 
     return await obtenerMatriculaPorId(
