@@ -4379,6 +4379,10 @@ module.exports = {
 
   obtenerHistorial,
 
-  crearPlanPagoManual
+  crearPlanPagoManual,
+
+  calcularPrevisualizacionPlanPago,
+
+  previsualizarPlanPago
 
 };
