@@ -222,6 +222,8 @@ async function cambiarEstado(req, res) {
   }
 }
 
+
+
 async function listarMaquinas(req, res) {
   try {
     const { id } = req.params;
@@ -271,6 +273,60 @@ async function obtenerFinanzas(req, res) {
   }
 }
 
+
+async function previsualizarCuotas(req, res) {
+  try {
+
+    const {
+      plan_curso_id,
+      fecha_matricula,
+      monto_total,
+      cuota_inicial
+    } = req.body;
+
+    if (!plan_curso_id) {
+      return res.status(400).json({
+        ok: false,
+        message: 'El plan de curso es obligatorio.'
+      });
+    }
+
+    if (!fecha_matricula) {
+      return res.status(400).json({
+        ok: false,
+        message: 'La fecha de matrícula es obligatoria.'
+      });
+    }
+
+    const cuotas =
+      await matriculasService.previsualizarCuotas({
+        plan_curso_id,
+        fecha_matricula,
+        monto_total,
+        cuota_inicial
+      });
+
+    res.json({
+      ok: true,
+      data: cuotas
+    });
+
+  } catch (error) {
+
+    console.error(
+      'Error al previsualizar cuotas:',
+      error
+    );
+
+    res.status(500).json({
+      ok: false,
+      message:
+        error.message ||
+        'Error al previsualizar cuotas.'
+    });
+  }
+}
+
 module.exports = {
   listar,
   obtenerPorId,
@@ -280,5 +336,7 @@ module.exports = {
   listarMaquinas,
   obtenerFinanzas,
   actualizar,
-  obtenerHistorial
+  obtenerHistorial,
+  previsualizarCuotas
 };
+
