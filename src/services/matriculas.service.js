@@ -4194,7 +4194,161 @@ async function crearPlanPagoManual({
     client.release();
   }
 }
+// ==========================================================
+// CALCULAR PREVISUALIZACIÓN DE PLAN DE PAGOS
+//
+// NO INSERTA NADA EN BD.
+// Solo calcula cómo quedará el plan.
+// ==========================================================
 
+function calcularPrevisualizacionPlanPago({
+  monto_matricula = 0,
+  monto_cuota = 0,
+  cantidad_cuotas = 0,
+  monto_certificacion = 0
+}) {
+
+  const montoMatricula =
+    Number(
+      Number(monto_matricula || 0).toFixed(2)
+    );
+
+  const montoCuota =
+    Number(
+      Number(monto_cuota || 0).toFixed(2)
+    );
+
+  const cantidadCuotas =
+    Number(cantidad_cuotas || 0);
+
+  const montoCertificacion =
+    Number(
+      Number(monto_certificacion || 0).toFixed(2)
+    );
+
+  // --------------------------------------------------------
+  // VALIDACIONES
+  // --------------------------------------------------------
+
+  if (montoMatricula < 0) {
+    throw new Error(
+      'El monto de matrícula no puede ser negativo.'
+    );
+  }
+
+  if (montoCuota <= 0) {
+    throw new Error(
+      'El monto de la cuota mensual debe ser mayor a 0.'
+    );
+  }
+
+  if (
+    !Number.isInteger(cantidadCuotas) ||
+    cantidadCuotas <= 0
+  ) {
+    throw new Error(
+      'La cantidad de cuotas debe ser un número entero mayor a 0.'
+    );
+  }
+
+  if (montoCertificacion < 0) {
+    throw new Error(
+      'El monto de certificación no puede ser negativo.'
+    );
+  }
+
+  // --------------------------------------------------------
+  // CALCULAR TOTAL DE CUOTAS
+  // --------------------------------------------------------
+
+  const totalCuotas =
+    Number(
+      (
+        montoCuota *
+        cantidadCuotas
+      ).toFixed(2)
+    );
+
+  // --------------------------------------------------------
+  // CALCULAR TOTAL DEL PLAN
+  // --------------------------------------------------------
+
+  const montoTotal =
+    Number(
+      (
+        montoMatricula +
+        totalCuotas +
+        montoCertificacion
+      ).toFixed(2)
+    );
+
+  // --------------------------------------------------------
+  // GENERAR DETALLE DE CUOTAS
+  // --------------------------------------------------------
+
+  const cuotas = [];
+
+  for (
+    let i = 1;
+    i <= cantidadCuotas;
+    i++
+  ) {
+
+    cuotas.push({
+      numero_cuota: i,
+      monto: montoCuota
+    });
+  }
+
+  return {
+    monto_matricula:
+      montoMatricula,
+
+    monto_cuota:
+      montoCuota,
+
+    cantidad_cuotas:
+      cantidadCuotas,
+
+    monto_certificacion:
+      montoCertificacion,
+
+    total_cuotas:
+      totalCuotas,
+
+    monto_total:
+      montoTotal,
+
+    cuotas
+  };
+}
+
+
+// ==========================================================
+// PREVISUALIZAR PLAN DE PAGOS
+//
+// NO INSERTA NADA EN BD.
+// ==========================================================
+
+async function previsualizarPlanPago(data) {
+
+  const preview =
+    calcularPrevisualizacionPlanPago({
+      monto_matricula:
+        data.monto_matricula,
+
+      monto_cuota:
+        data.monto_cuota,
+
+      cantidad_cuotas:
+        data.cantidad_cuotas,
+
+      monto_certificacion:
+        data.monto_certificacion
+    });
+
+  return preview;
+}
 // ==========================================================
 // EXPORTS
 // ==========================================================
