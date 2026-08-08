@@ -1,5 +1,9 @@
 const matriculasService = require('../services/matriculas.service');
 
+const {
+  previsualizarPlanPago
+} = require('../services/matriculas.service');
+
 function validarMatricula(body) {
   const errores = [];
 
