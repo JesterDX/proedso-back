@@ -1,5 +1,73 @@
+
 const pool = require('../config/db');
-const { crearAsignacionPracticas } = require('./practicas.service');
+const {
+  crearAsignacionPracticas
+} = require('./practicas.service');
+
+// ==========================================================
+// UTILIDADES
+// ==========================================================
+
+function normalizarNumero(valor, defecto = 0) {
+  const numero = Number(valor);
+
+  return Number.isFinite(numero)
+    ? numero
+    : defecto;
+}
+
+function normalizarFecha(fecha) {
+  if (!fecha) {
+    return null;
+  }
+
+  if (fecha instanceof Date) {
+    if (Number.isNaN(fecha.getTime())) {
+      return null;
+    }
+
+    return fecha.toISOString().slice(0, 10);
+  }
+
+  const texto = String(fecha).trim();
+
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    return texto;
+  }
+
+  // DD/MM/YYYY
+  const match = texto.match(
+    /^(\d{2})\/(\d{2})\/(\d{4})$/
+  );
+
+  if (match) {
+    return `${match[3]}-${match[2]}-${match[1]}`;
+  }
+
+  return texto;
+}
+
+function compararArraysNumericos(a = [], b = []) {
+  const aa = a
+    .map(Number)
+    .filter(Number.isFinite)
+    .sort((x, y) => x - y);
+
+  const bb = b
+    .map(Number)
+    .filter(Number.isFinite)
+    .sort((x, y) => x - y);
+
+  if (aa.length !== bb.length) {
+    return false;
+  }
+
+  return aa.every(
+    (valor, index) =>
+      valor === bb[index]
+  );
+}
 
 // ==========================================================
 // LISTAR MATRÍCULAS
@@ -15,9 +83,13 @@ async function listarMatriculas(filtros = {}) {
   } = filtros;
 
   const values = [];
-  let where = `WHERE 1=1`;
+
+  let where = `
+    WHERE 1=1
+  `;
 
   if (estado) {
+
     values.push(estado);
 
     where += `
@@ -39,34 +111,41 @@ async function listarMatriculas(filtros = {}) {
       `%${searchNormalizado}%`
     );
 
+    const param =
+      `$${values.length}`;
+
     where += `
       AND (
-        a.dni ILIKE $${values.length}
+        a.dni ILIKE ${param}
 
-        OR unaccent(lower(a.nombres))
-          LIKE unaccent($${values.length})
+        OR unaccent(
+          lower(a.nombres)
+        ) LIKE unaccent(${param})
 
-        OR unaccent(lower(a.apellidos))
-          LIKE unaccent($${values.length})
+        OR unaccent(
+          lower(a.apellidos)
+        ) LIKE unaccent(${param})
 
         OR unaccent(
           lower(
             a.nombres || ' ' || a.apellidos
           )
-        ) LIKE unaccent($${values.length})
+        ) LIKE unaccent(${param})
 
         OR unaccent(
           lower(
             a.apellidos || ' ' || a.nombres
           )
-        ) LIKE unaccent($${values.length})
+        ) LIKE unaccent(${param})
       )
     `;
   }
 
   if (anio) {
 
-    values.push(Number(anio));
+    values.push(
+      Number(anio)
+    );
 
     where += `
       AND EXTRACT(
@@ -77,7 +156,9 @@ async function listarMatriculas(filtros = {}) {
 
   if (mes) {
 
-    values.push(Number(mes));
+    values.push(
+      Number(mes)
+    );
 
     where += `
       AND EXTRACT(
@@ -124,7 +205,6 @@ async function listarMatriculas(filtros = {}) {
   return result.rows;
 }
 
-
 // ==========================================================
 // OBTENER MATRÍCULA POR ID
 // ==========================================================
@@ -145,7 +225,6 @@ async function obtenerMatriculaPorId(id) {
   return result.rows[0] || null;
 }
 
-
 // ==========================================================
 // OBTENER ESTADO POR CÓDIGO
 // ==========================================================
@@ -161,11 +240,8 @@ async function obtenerEstadoPorCodigo(
         id,
         codigo,
         nombre
-
       FROM estados_alumno
-
       WHERE codigo = $1
-
       LIMIT 1
       `,
       [codigo]
@@ -173,7 +249,6 @@ async function obtenerEstadoPorCodigo(
 
   return result.rows[0] || null;
 }
-
 
 // ==========================================================
 // ACTUALIZAR ESTADO
@@ -196,11 +271,8 @@ async function actualizarEstadoMatricula(
       await client.query(
         `
         UPDATE matriculas
-
         SET estado_alumno_id = $1
-
         WHERE id = $2
-
         RETURNING *
         `,
         [
@@ -215,13 +287,34 @@ async function actualizarEstadoMatricula(
       );
     }
 
+    const estado =
+      await client.query(
+        `
+        SELECT
+          codigo,
+          nombre
+        FROM estados_alumno
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [estadoAlumnoId]
+      );
+
+    const estadoNombre =
+      estado.rows[0]
+        ? (
+          estado.rows[0].nombre ||
+          estado.rows[0].codigo
+        )
+        : `ID ${estadoAlumnoId}`;
+
     await registrarHistorial(
       client,
       {
         matricula_id: id,
         accion: 'CAMBIO_ESTADO',
         descripcion:
-          `Cambio de estado a ID ${estadoAlumnoId}`
+          `Cambio de estado a ${estadoNombre}.`
       },
       user
     );
@@ -244,49 +337,107 @@ async function actualizarEstadoMatricula(
   }
 }
 
-
 // ==========================================================
 // ACTUALIZAR MATRÍCULA SIMPLE
 // ==========================================================
 
 async function actualizarMatricula(
   id,
-  data
+  data,
+  user = null
 ) {
 
-  const result =
-    await pool.query(
-      `
-      UPDATE matriculas
+  const client =
+    await pool.connect();
 
-      SET
-        alumno_id = $1,
-        plan_curso_id = $2,
-        estado_alumno_id = $3,
-        fecha_matricula = $4,
-        fecha_inicio = $5,
-        fecha_fin_estimada = $6,
-        notas = $7
+  try {
 
-      WHERE id = $8
+    await client.query('BEGIN');
 
-      RETURNING *
-      `,
-      [
-        data.alumno_id,
-        data.plan_curso_id,
-        data.estado_alumno_id,
-        data.fecha_matricula,
-        data.fecha_inicio || null,
-        data.fecha_fin_estimada || null,
-        data.notas || null,
-        id
-      ]
+    const actualResult =
+      await client.query(
+        `
+        SELECT *
+        FROM matriculas
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [id]
+      );
+
+    const actual =
+      actualResult.rows[0];
+
+    if (!actual) {
+      throw new Error(
+        'Matrícula no encontrada.'
+      );
+    }
+
+    const result =
+      await client.query(
+        `
+        UPDATE matriculas
+
+        SET
+          alumno_id = $1,
+          plan_curso_id = $2,
+          estado_alumno_id = $3,
+          fecha_matricula = $4,
+          fecha_inicio = $5,
+          fecha_fin_estimada = $6,
+          notas = $7
+
+        WHERE id = $8
+
+        RETURNING *
+        `,
+        [
+          data.alumno_id,
+          data.plan_curso_id,
+          data.estado_alumno_id,
+          normalizarFecha(
+            data.fecha_matricula
+          ),
+          normalizarFecha(
+            data.fecha_inicio
+          ),
+          normalizarFecha(
+            data.fecha_fin_estimada
+          ),
+          data.notas || null,
+          id
+        ]
+      );
+
+    await registrarHistorial(
+      client,
+      {
+        matricula_id: id,
+        accion: 'ACTUALIZACION',
+        descripcion:
+          'Se actualizaron los datos básicos de la matrícula.'
+      },
+      user
     );
 
-  return result.rows[0] || null;
-}
+    await client.query('COMMIT');
 
+    return result.rows[0] || null;
+
+  } catch (error) {
+
+    await client.query(
+      'ROLLBACK'
+    );
+
+    throw error;
+
+  } finally {
+
+    client.release();
+  }
+}
 
 // ==========================================================
 // OBTENER DETALLE DE MATRÍCULA
@@ -358,41 +509,46 @@ async function obtenerDetalleMatricula(
   return result.rows[0] || null;
 }
 
-
 // ==========================================================
 // LISTAR MÁQUINAS DE MATRÍCULA
+//
+// Por defecto devuelve solo las activas.
 // ==========================================================
 
-async function listarMaquinasDeMatricula(matriculaId) {
-  const result = await pool.query(
-    `
-    SELECT
-      mm.id,
-      mm.matricula_id,
-      mm.maquina_id,
-      mm.orden,
-      mm.es_regalo,
-      mm.horas_asignadas,
-      mm.sesiones_totales,
-      mm.sesiones_completadas,
-      mm.estado,
+async function listarMaquinasDeMatricula(
+  matriculaId
+) {
 
-      m.nombre AS maquina_nombre
+  const result =
+    await pool.query(
+      `
+      SELECT
+        mm.id,
+        mm.matricula_id,
+        mm.maquina_id,
+        mm.orden,
+        mm.es_regalo,
+        mm.horas_asignadas,
+        mm.sesiones_totales,
+        mm.sesiones_completadas,
+        mm.estado,
 
-    FROM matricula_maquinas mm
+        m.nombre AS maquina_nombre
 
-    INNER JOIN maquinas m
-      ON m.id = mm.maquina_id
+      FROM matricula_maquinas mm
 
-    WHERE mm.matricula_id = $1
-      AND mm.estado = 'PENDIENTE'
+      INNER JOIN maquinas m
+        ON m.id = mm.maquina_id
 
-    ORDER BY
-      mm.orden ASC,
-      mm.id ASC
-    `,
-    [matriculaId]
-  );
+      WHERE mm.matricula_id = $1
+        AND mm.estado <> 'RETIRADA'
+
+      ORDER BY
+        mm.orden ASC,
+        mm.id ASC
+      `,
+      [matriculaId]
+    );
 
   return result.rows;
 }
@@ -434,7 +590,6 @@ async function obtenerPlanCursoDetalle(
   return result.rows[0] || null;
 }
 
-
 // ==========================================================
 // OBTENER MÁQUINA POR NOMBRE
 // ==========================================================
@@ -450,12 +605,8 @@ async function obtenerMaquinaPorNombre(
       SELECT
         id,
         nombre
-
       FROM maquinas
-
-      WHERE LOWER(nombre) =
-            LOWER($1)
-
+      WHERE LOWER(nombre) = LOWER($1)
       LIMIT 1
       `,
       [nombre]
@@ -463,7 +614,6 @@ async function obtenerMaquinaPorNombre(
 
   return result.rows[0] || null;
 }
-
 
 // ==========================================================
 // OBTENER MÁQUINAS DEL PLAN
@@ -495,7 +645,6 @@ async function obtenerPlanMaquinas(
 
   return result.rows;
 }
-
 
 // ==========================================================
 // OBTENER HORAS DE PRÁCTICA
@@ -529,7 +678,6 @@ async function obtenerHorasPlanPorMaquina(
 
   return result.rows[0] || null;
 }
-
 
 // ==========================================================
 // INSERTAR MATRÍCULA-MÁQUINA
@@ -579,7 +727,6 @@ async function insertarMatriculaMaquina(
 
   return result.rows[0];
 }
-
 
 // ==========================================================
 // OBTENER PRECIO VIGENTE
@@ -651,7 +798,9 @@ async function obtenerPlanPrecioVigente(
 
   const values = [
     planCursoId,
-    fechaMatricula
+    normalizarFecha(
+      fechaMatricula
+    )
   ];
 
   if (tipo === 'INDIVIDUAL') {
@@ -663,7 +812,6 @@ async function obtenerPlanPrecioVigente(
       maquinasAGuardar[0];
 
     if (!maquinaPrincipal) {
-
       throw new Error(
         'No se encontró la máquina seleccionada para calcular el precio individual.'
       );
@@ -720,7 +868,6 @@ async function obtenerPlanPrecioVigente(
   return result.rows[0] || null;
 }
 
-
 // ==========================================================
 // CONCEPTO DE COBRO
 // ==========================================================
@@ -749,7 +896,6 @@ async function obtenerConceptoCobroPorCodigo(
 
   return result.rows[0] || null;
 }
-
 
 // ==========================================================
 // INSERTAR PLAN DE PAGOS
@@ -805,7 +951,6 @@ async function insertarPlanPagoAlumno(
   return result.rows[0];
 }
 
-
 // ==========================================================
 // INSERTAR CUOTA
 // ==========================================================
@@ -850,9 +995,15 @@ async function insertarCuota(
         data.plan_pago_alumno_id,
         data.numero_cuota,
         data.concepto_id,
-        data.fecha_programada,
-        data.fecha_vencimiento,
-        data.monto_programado,
+        normalizarFecha(
+          data.fecha_programada
+        ),
+        normalizarFecha(
+          data.fecha_vencimiento
+        ),
+        normalizarNumero(
+          data.monto_programado
+        ),
         data.observaciones || null
       ]
     );
@@ -860,20 +1011,8 @@ async function insertarCuota(
   return result.rows[0];
 }
 
-
 // ==========================================================
 // CALCULAR ESTRUCTURA FINANCIERA
-//
-// ESTA ES LA PARTE IMPORTANTE.
-//
-// El monto_total SIEMPRE debe cerrar:
-//
-// matrícula
-// + cuotas
-// + certificación
-// = monto_total
-//
-// La última cuota absorbe cualquier diferencia de centavos.
 // ==========================================================
 
 function calcularEstructuraFinanciera(
@@ -883,17 +1022,23 @@ function calcularEstructuraFinanciera(
 
   const montoTotal =
     Number(
-      planPrecio.monto_total || 0
+      Number(
+        planPrecio.monto_total || 0
+      ).toFixed(2)
     );
 
   const montoMatricula =
     Number(
-      planPrecio.matricula || 0
+      Number(
+        planPrecio.matricula || 0
+      ).toFixed(2)
     );
 
   const montoCertificacion =
     Number(
-      planPrecio.certificacion || 0
+      Number(
+        planPrecio.certificacion || 0
+      ).toFixed(2)
     );
 
   const cantidadCuotasBase =
@@ -903,7 +1048,9 @@ function calcularEstructuraFinanciera(
 
   const montoCuotaBase =
     Number(
-      planPrecio.monto_cuota || 0
+      Number(
+        planPrecio.monto_cuota || 0
+      ).toFixed(2)
     );
 
   const modalidad =
@@ -911,25 +1058,19 @@ function calcularEstructuraFinanciera(
       modalidadPago || 'MENSUAL'
     ).toUpperCase();
 
-  if (
-    montoTotal <= 0
-  ) {
+  if (montoTotal <= 0) {
     throw new Error(
       'El monto total del plan de precio no es válido.'
     );
   }
 
-  if (
-    cantidadCuotasBase <= 0
-  ) {
+  if (cantidadCuotasBase <= 0) {
     throw new Error(
       'El plan de precio no tiene una cantidad válida de cuotas.'
     );
   }
 
-  if (
-    montoCuotaBase <= 0
-  ) {
+  if (montoCuotaBase <= 0) {
     throw new Error(
       'El plan de precio no tiene un monto de cuota válido.'
     );
@@ -986,10 +1127,6 @@ function calcularEstructuraFinanciera(
     );
   }
 
-  // --------------------------------------------------------
-  // Generar importes
-  // --------------------------------------------------------
-
   const cuotas = [];
 
   let acumulado = 0;
@@ -1006,12 +1143,6 @@ function calcularEstructuraFinanciera(
       i === cantidadCuotasFinal
     ) {
 
-      // ----------------------------------------------------
-      // ÚLTIMA CUOTA
-      //
-      // Aquí cerramos exactamente el total.
-      // ----------------------------------------------------
-
       monto =
         Number(
           (
@@ -1026,9 +1157,7 @@ function calcularEstructuraFinanciera(
         montoCuotaBaseFinal;
     }
 
-    if (
-      monto <= 0
-    ) {
+    if (monto <= 0) {
       throw new Error(
         `La cuota ${i} resultó con un monto inválido (${monto}).`
       );
@@ -1043,13 +1172,9 @@ function calcularEstructuraFinanciera(
 
     cuotas.push({
       numero_cuota: i,
-      monto: monto
+      monto
     });
   }
-
-  // --------------------------------------------------------
-  // VALIDACIÓN FINAL
-  // --------------------------------------------------------
 
   const totalCalculado =
     Number(
@@ -1088,7 +1213,6 @@ function calcularEstructuraFinanciera(
   };
 }
 
-
 // ==========================================================
 // GENERAR FECHAS DE CUOTAS
 // ==========================================================
@@ -1099,19 +1223,27 @@ function generarFechasCuotas(
   modalidadPago
 ) {
 
-  const diasEntreCuotas =
+  const modalidad =
     String(
       modalidadPago || 'MENSUAL'
-    ).toUpperCase() === 'QUINCENAL'
+    ).toUpperCase();
+
+  const diasEntreCuotas =
+    modalidad === 'QUINCENAL'
       ? 14
       : 20;
+
+  const fechaNormalizada =
+    normalizarFecha(
+      fechaBase
+    );
 
   return cuotas.map(
     cuota => {
 
       const fecha =
         sumarDias(
-          fechaBase,
+          fechaNormalizada,
           diasEntreCuotas *
             (
               cuota.numero_cuota - 1
@@ -1126,7 +1258,6 @@ function generarFechasCuotas(
     }
   );
 }
-
 
 // ==========================================================
 // OBTENER PLAN DE PAGO ACTUAL
@@ -1152,12 +1283,8 @@ async function obtenerPlanPagoAlumno(
   return result.rows[0] || null;
 }
 
-
 // ==========================================================
 // VALIDAR SI EXISTEN PAGOS
-//
-// No permitimos destruir/reconstruir cuotas si ya existe
-// dinero pagado.
 // ==========================================================
 
 async function validarPlanSinPagos(
@@ -1170,16 +1297,20 @@ async function validarPlanSinPagos(
       `
       SELECT
         COUNT(*) FILTER (
-          WHERE COALESCE(monto_pagado, 0) > 0
-             OR estado IN (
-               'PAGADO',
-               'PARCIAL'
-             )
+          WHERE
+            COALESCE(monto_pagado, 0) > 0
+            OR estado IN (
+              'PAGADO',
+              'PARCIAL'
+            )
         ) AS cuotas_con_pago,
 
         COALESCE(
           SUM(
-            COALESCE(monto_pagado, 0)
+            COALESCE(
+              monto_pagado,
+              0
+            )
           ),
           0
         ) AS total_pagado
@@ -1210,11 +1341,10 @@ async function validarPlanSinPagos(
   ) {
 
     throw new Error(
-      'No se puede recalcular el plan de pagos porque la matrícula ya tiene pagos registrados. Los pagos existentes deben conservarse y el cambio financiero debe realizarse manualmente.'
+      'No se puede recalcular automáticamente el plan de pagos porque la matrícula ya tiene pagos registrados. Los pagos existentes deben conservarse.'
     );
   }
 }
-
 
 // ==========================================================
 // CREAR PLAN FINANCIERO COMPLETO
@@ -1229,7 +1359,7 @@ async function crearPlanFinanciero(
     fechaInicio,
     fechaFinEstimada,
     modalidadPago,
-    nombresMaquinas
+    nombresMaquinas = []
   }
 ) {
 
@@ -1269,8 +1399,10 @@ async function crearPlanFinanciero(
     );
 
   const fechaBaseCuotas =
-    fechaInicio ||
-    fechaMatricula;
+    normalizarFecha(
+      fechaInicio ||
+      fechaMatricula
+    );
 
   if (!fechaBaseCuotas) {
     throw new Error(
@@ -1401,7 +1533,9 @@ async function crearPlanFinanciero(
   ) {
 
     const fechaCertificacion =
-      fechaFinEstimada ||
+      normalizarFecha(
+        fechaFinEstimada
+      ) ||
       sumarMeses(
         fechaBaseCuotas,
         financiera.cantidadCuotasBase
@@ -1437,17 +1571,10 @@ async function crearPlanFinanciero(
   return planPagoAlumno;
 }
 
-
 // ==========================================================
 // RECALCULAR PLAN FINANCIERO
 //
-// Se utiliza cuando cambia:
-// - plan de curso
-// - máquina que determina precio
-// - modalidad de pago
-//
-// Solo se permite automáticamente si todavía no existen
-// pagos registrados.
+// SOLO si NO existen pagos.
 // ==========================================================
 
 async function recalcularPlanFinanciero(
@@ -1460,7 +1587,7 @@ async function recalcularPlanFinanciero(
     fechaInicio,
     fechaFinEstimada,
     modalidadPago,
-    nombresMaquinas
+    nombresMaquinas = []
   }
 ) {
 
@@ -1485,13 +1612,6 @@ async function recalcularPlanFinanciero(
     planPagoActual.id
   );
 
-  // --------------------------------------------------------
-  // ELIMINAR SOLAMENTE LAS CUOTAS DEL PLAN ACTUAL
-  //
-  // Como validamos que no haya pagos, no destruimos
-  // información financiera real.
-  // --------------------------------------------------------
-
   await client.query(
     `
     DELETE FROM cuotas
@@ -1509,8 +1629,10 @@ async function recalcularPlanFinanciero(
     );
 
   const fechaBaseCuotas =
-    fechaInicio ||
-    fechaMatricula;
+    normalizarFecha(
+      fechaInicio ||
+      fechaMatricula
+    );
 
   if (!fechaBaseCuotas) {
     throw new Error(
@@ -1527,10 +1649,6 @@ async function recalcularPlanFinanciero(
 
   const notaPago =
     `${planPrecio.nombre} - Máquinas: ${nombresMaquinas.join(', ')}`;
-
-  // --------------------------------------------------------
-  // ACTUALIZAR PLAN
-  // --------------------------------------------------------
 
   await client.query(
     `
@@ -1560,10 +1678,6 @@ async function recalcularPlanFinanciero(
       planPagoActual.id
     ]
   );
-
-  // --------------------------------------------------------
-  // CONCEPTOS
-  // --------------------------------------------------------
 
   const conceptoMatricula =
     await obtenerConceptoCobroPorCodigo(
@@ -1674,7 +1788,9 @@ async function recalcularPlanFinanciero(
   ) {
 
     const fechaCertificacion =
-      fechaFinEstimada ||
+      normalizarFecha(
+        fechaFinEstimada
+      ) ||
       sumarMeses(
         fechaBaseCuotas,
         financiera.cantidadCuotasBase
@@ -1707,15 +1823,219 @@ async function recalcularPlanFinanciero(
     );
   }
 
-  const actualizado =
-    await obtenerPlanPagoAlumno(
-      client,
-      matriculaId
-    );
-
-  return actualizado;
+  return await obtenerPlanPagoAlumno(
+    client,
+    matriculaId
+  );
 }
 
+// ==========================================================
+// DETERMINAR MÁQUINAS
+// ==========================================================
+
+async function determinarMaquinas(
+  client,
+  plan,
+  maquinasSeleccionadas
+) {
+
+  let maquinasAGuardar = [];
+
+  if (
+    plan.permite_eleccion_personalizada
+  ) {
+
+    const seleccionadas =
+      Array.isArray(
+        maquinasSeleccionadas
+      )
+        ? maquinasSeleccionadas
+            .map(Number)
+            .filter(
+              Number.isInteger
+            )
+        : [];
+
+    if (
+      seleccionadas.length !==
+      Number(
+        plan.cantidad_maquinas
+      )
+    ) {
+
+      throw new Error(
+        `Debes seleccionar exactamente ${plan.cantidad_maquinas} máquina(s) para este plan.`
+      );
+    }
+
+    const duplicadas =
+      new Set(
+        seleccionadas
+      ).size !==
+      seleccionadas.length;
+
+    if (duplicadas) {
+      throw new Error(
+        'No puedes seleccionar la misma máquina más de una vez.'
+      );
+    }
+
+    maquinasAGuardar =
+      seleccionadas.map(
+        (
+          maquinaId,
+          index
+        ) => ({
+          maquina_id:
+            maquinaId,
+
+          orden:
+            index + 1,
+
+          es_regalo:
+            false
+        })
+      );
+
+  } else {
+
+    const planMaquinas =
+      await obtenerPlanMaquinas(
+        client,
+        plan.id
+      );
+
+    if (
+      !planMaquinas.length
+    ) {
+
+      throw new Error(
+        'El plan de curso no tiene máquinas configuradas.'
+      );
+    }
+
+    maquinasAGuardar =
+      planMaquinas.map(
+        item => ({
+          maquina_id:
+            Number(
+              item.maquina_id
+            ),
+
+          orden:
+            Number(
+              item.orden
+            ),
+
+          es_regalo:
+            Boolean(
+              item.es_regalo
+            )
+        })
+      );
+  }
+
+  // --------------------------------------------------------
+  // MULTIPLE → CAMIONETA GRATIS
+  // --------------------------------------------------------
+
+  const esMultiple =
+    String(
+      plan.tipo_curso_codigo
+    ).toUpperCase() ===
+    'MULTIPLE';
+
+  if (esMultiple) {
+
+    const camioneta =
+      await obtenerMaquinaPorNombre(
+        client,
+        'Camioneta'
+      );
+
+    if (!camioneta) {
+
+      throw new Error(
+        'No se encontró la máquina Camioneta.'
+      );
+    }
+
+    const yaExiste =
+      maquinasAGuardar.some(
+        item =>
+          Number(
+            item.maquina_id
+          ) ===
+          Number(
+            camioneta.id
+          )
+      );
+
+    if (!yaExiste) {
+
+      maquinasAGuardar.push({
+        maquina_id:
+          Number(
+            camioneta.id
+          ),
+
+        orden:
+          maquinasAGuardar.length + 1,
+
+        es_regalo:
+          true
+      });
+    }
+  }
+
+  return maquinasAGuardar;
+}
+
+// ==========================================================
+// OBTENER NOMBRES DE MÁQUINAS
+// ==========================================================
+
+async function obtenerNombresMaquinas(
+  client,
+  maquinas
+) {
+
+  const ids =
+    maquinas
+      .map(
+        item =>
+          Number(
+            item.maquina_id
+          )
+      )
+      .filter(
+        Number.isInteger
+      );
+
+  if (!ids.length) {
+    return [];
+  }
+
+  const result =
+    await client.query(
+      `
+      SELECT
+        id,
+        nombre
+
+      FROM maquinas
+
+      WHERE id = ANY($1::int[])
+
+      ORDER BY nombre
+      `,
+      [ids]
+    );
+
+  return result.rows.map(
+    row => row.nombre
+  );
+}
 
 // ==========================================================
 // CREAR MATRÍCULA
@@ -1734,6 +2054,27 @@ async function crearMatricula(
     await client.query(
       'BEGIN'
     );
+
+    const fechaMatricula =
+      normalizarFecha(
+        data.fecha_matricula
+      );
+
+    const fechaInicio =
+      normalizarFecha(
+        data.fecha_inicio
+      );
+
+    const fechaFinEstimada =
+      normalizarFecha(
+        data.fecha_fin_estimada
+      );
+
+    if (!fechaMatricula) {
+      throw new Error(
+        'La fecha de matrícula es obligatoria.'
+      );
+    }
 
     // ------------------------------------------------------
     // CREAR MATRÍCULA
@@ -1772,9 +2113,9 @@ async function crearMatricula(
           data.alumno_id,
           data.plan_curso_id,
           data.estado_alumno_id,
-          data.fecha_matricula,
-          data.fecha_inicio || null,
-          data.fecha_fin_estimada || null,
+          fechaMatricula,
+          fechaInicio,
+          fechaFinEstimada,
           null,
           data.notas || null
         ]
@@ -1800,7 +2141,7 @@ async function crearMatricula(
           'CREACION',
 
         descripcion:
-          `Matrícula creada con estado ID ${data.estado_alumno_id}`
+          'Matrícula creada.'
       },
       user
     );
@@ -1923,7 +2264,7 @@ async function crearMatricula(
       await obtenerPlanPrecioVigente(
         client,
         data.plan_curso_id,
-        data.fecha_matricula,
+        fechaMatricula,
         maquinasAGuardar,
         plan.tipo_curso_codigo
       );
@@ -1943,15 +2284,19 @@ async function crearMatricula(
       client,
       {
         matriculaId,
+
         planPrecio,
-        fechaMatricula:
-          data.fecha_matricula,
-        fechaInicio:
-          data.fecha_inicio || null,
-        fechaFinEstimada:
-          data.fecha_fin_estimada || null,
+
+        fechaMatricula,
+
+        fechaInicio,
+
+        fechaFinEstimada,
+
         modalidadPago:
-          data.modalidad_pago || 'MENSUAL',
+          data.modalidad_pago ||
+          'MENSUAL',
+
         nombresMaquinas
       }
     );
@@ -1976,155 +2321,6 @@ async function crearMatricula(
   }
 }
 
-
-// ==========================================================
-// DETERMINAR MÁQUINAS
-// ==========================================================
-
-async function determinarMaquinas(
-  client,
-  plan,
-  maquinasSeleccionadas
-) {
-
-  let maquinasAGuardar = [];
-
-  if (
-    plan.permite_eleccion_personalizada
-  ) {
-
-    const seleccionadas =
-      Array.isArray(
-        maquinasSeleccionadas
-      )
-        ? maquinasSeleccionadas
-            .map(Number)
-            .filter(Boolean)
-        : [];
-
-    if (
-      seleccionadas.length !==
-      Number(
-        plan.cantidad_maquinas
-      )
-    ) {
-
-      throw new Error(
-        `Debes seleccionar exactamente ${plan.cantidad_maquinas} máquina(s) para este plan.`
-      );
-    }
-
-    maquinasAGuardar =
-      seleccionadas.map(
-        (
-          maquinaId,
-          index
-        ) => ({
-          maquina_id:
-            maquinaId,
-
-          orden:
-            index + 1,
-
-          es_regalo:
-            false
-        })
-      );
-
-  } else {
-
-    const planMaquinas =
-      await obtenerPlanMaquinas(
-        client,
-        plan.id
-      );
-
-    if (
-      !planMaquinas.length
-    ) {
-
-      throw new Error(
-        'El plan de curso no tiene máquinas configuradas.'
-      );
-    }
-
-    maquinasAGuardar =
-      planMaquinas.map(
-        item => ({
-          maquina_id:
-            Number(
-              item.maquina_id
-            ),
-
-          orden:
-            Number(
-              item.orden
-            ),
-
-          es_regalo:
-            Boolean(
-              item.es_regalo
-            )
-        })
-      );
-  }
-
-  // --------------------------------------------------------
-  // MULTIPLE → CAMIONETA GRATIS
-  // --------------------------------------------------------
-
-  const esMultiple =
-    String(
-      plan.tipo_curso_codigo
-    ).toUpperCase() ===
-    'MULTIPLE';
-
-  if (esMultiple) {
-
-    const camioneta =
-      await obtenerMaquinaPorNombre(
-        client,
-        'Camioneta'
-      );
-
-    if (!camioneta) {
-
-      throw new Error(
-        'No se encontró la máquina Camioneta.'
-      );
-    }
-
-    const yaExiste =
-      maquinasAGuardar.some(
-        item =>
-          Number(
-            item.maquina_id
-          ) ===
-          Number(
-            camioneta.id
-          )
-      );
-
-    if (!yaExiste) {
-
-      maquinasAGuardar.push({
-        maquina_id:
-          Number(
-            camioneta.id
-          ),
-
-        orden:
-          maquinasAGuardar.length + 1,
-
-        es_regalo:
-          true
-      });
-    }
-  }
-
-  return maquinasAGuardar;
-}
-
 // ==========================================================
 // PROCESAR ACTUALIZACIÓN COMPLETA
 // ==========================================================
@@ -2134,27 +2330,33 @@ async function procesarTodo(
   data,
   user
 ) {
-  const client = await pool.connect();
+
+  const client =
+    await pool.connect();
 
   try {
 
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
     // ======================================================
     // 1. OBTENER MATRÍCULA ACTUAL
     // ======================================================
 
-    const actualResult = await client.query(
-      `
-      SELECT *
-      FROM matriculas
-      WHERE id = $1
-      LIMIT 1
-      `,
-      [id]
-    );
+    const actualResult =
+      await client.query(
+        `
+        SELECT *
+        FROM matriculas
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [id]
+      );
 
-    const actual = actualResult.rows[0];
+    const actual =
+      actualResult.rows[0];
 
     if (!actual) {
       throw new Error(
@@ -2163,16 +2365,28 @@ async function procesarTodo(
     }
 
     // ======================================================
-    // 2. OBTENER TODAS LAS MÁQUINAS HISTÓRICAS
+    // 2. DATOS NORMALIZADOS
+    // ======================================================
+
+    const fechaMatricula =
+      normalizarFecha(
+        data.fecha_matricula
+      );
+
+    const fechaInicio =
+      normalizarFecha(
+        data.fecha_inicio
+      );
+
+    const fechaFinEstimada =
+      normalizarFecha(
+        data.fecha_fin_estimada
+      );
+
+    // ======================================================
+    // 3. OBTENER TODAS LAS MÁQUINAS
     //
-    // IMPORTANTE:
-    //
-    // NO filtramos RETIRADA aquí.
-    //
-    // Necesitamos saber si una máquina ya existió alguna
-    // vez para evitar el UNIQUE:
-    //
-    // (matricula_id, maquina_id)
+    // NO filtramos RETIRADA.
     // ======================================================
 
     const todasMaquinasResult =
@@ -2204,21 +2418,20 @@ async function procesarTodo(
       todasMaquinasResult.rows;
 
     // ======================================================
-    // 3. OBTENER SOLO LAS MÁQUINAS ACTIVAS
-    //
-    // Estas son las que realmente tiene actualmente
-    // la matrícula.
+    // 4. SOLO ACTIVAS
     // ======================================================
 
     const maquinasActuales =
       todasMaquinas.filter(
         maquina =>
-          String(maquina.estado)
-            .toUpperCase() !== 'RETIRADA'
+          String(
+            maquina.estado
+          ).toUpperCase() !==
+          'RETIRADA'
       );
 
     // ======================================================
-    // 4. DETECTAR SI EL FRONT ENVIÓ MÁQUINAS
+    // 5. DETECTAR SI FRONT ENVIÓ MÁQUINAS
     // ======================================================
 
     const seEnvioMaquinas =
@@ -2229,22 +2442,26 @@ async function procesarTodo(
     let maquinasNuevas = [];
 
     // ======================================================
-    // 5. DETERMINAR MÁQUINAS NUEVAS
+    // 6. OBTENER PLAN ACTUALIZADO
+    // ======================================================
+
+    const planActualizado =
+      await obtenerPlanCursoDetalle(
+        client,
+        data.plan_curso_id
+      );
+
+    if (!planActualizado) {
+      throw new Error(
+        'No se encontró el plan de curso.'
+      );
+    }
+
+    // ======================================================
+    // 7. DETERMINAR MÁQUINAS NUEVAS
     // ======================================================
 
     if (seEnvioMaquinas) {
-
-      const planActualizado =
-        await obtenerPlanCursoDetalle(
-          client,
-          data.plan_curso_id
-        );
-
-      if (!planActualizado) {
-        throw new Error(
-          'No se encontró el plan de curso.'
-        );
-      }
 
       maquinasNuevas =
         await determinarMaquinas(
@@ -2255,59 +2472,97 @@ async function procesarTodo(
     }
 
     // ======================================================
-    // 6. DETECTAR CAMBIO DE PLAN
+    // 8. DETECTAR CAMBIO DE PLAN
     // ======================================================
 
     const cambioPlan =
-      Number(actual.plan_curso_id) !==
-      Number(data.plan_curso_id);
+      Number(
+        actual.plan_curso_id
+      ) !==
+      Number(
+        data.plan_curso_id
+      );
 
     // ======================================================
-    // 7. DETECTAR CAMBIO DE MÁQUINAS
+    // 9. DETECTAR CAMBIO DE MÁQUINAS
     // ======================================================
 
-    let cambioMaquinas = false;
+    let cambioMaquinas =
+      false;
 
     if (seEnvioMaquinas) {
 
       const idsActuales =
-        maquinasActuales
-          .map(
-            item =>
-              Number(item.maquina_id)
-          )
-          .sort(
-            (a, b) => a - b
-          );
+        maquinasActuales.map(
+          item =>
+            Number(
+              item.maquina_id
+            )
+        );
 
       const idsNuevos =
-        maquinasNuevas
-          .map(
-            item =>
-              Number(item.maquina_id)
-          )
-          .sort(
-            (a, b) => a - b
-          );
+        maquinasNuevas.map(
+          item =>
+            Number(
+              item.maquina_id
+            )
+        );
 
       cambioMaquinas =
-        idsActuales.length !==
-          idsNuevos.length ||
-
-        idsActuales.some(
-          (maquinaId, index) =>
-            maquinaId !==
-            idsNuevos[index]
+        !compararArraysNumericos(
+          idsActuales,
+          idsNuevos
         );
     }
 
     // ======================================================
-    // 8. ACTUALIZAR DATOS DE MATRÍCULA
+    // 10. MODALIDAD ACTUAL
+    // ======================================================
+
+    const planPagoActual =
+      await obtenerPlanPagoAlumno(
+        client,
+        id
+      );
+
+    const modalidadNueva =
+      String(
+        data.modalidad_pago ||
+        'MENSUAL'
+      ).toUpperCase();
+
+    const modalidadActual =
+      planPagoActual &&
+      planPagoActual.modalidad_pago
+        ? String(
+            planPagoActual.modalidad_pago
+          ).toUpperCase()
+        : null;
+
+    const cambioModalidad =
+      Boolean(
+        planPagoActual &&
+        modalidadActual !==
+        modalidadNueva
+      );
+
+    // ======================================================
+    // 11. DETERMINAR CAMBIO FINANCIERO
+    // ======================================================
+
+    const cambioFinanciero =
+      cambioPlan ||
+      cambioMaquinas ||
+      cambioModalidad;
+
+    // ======================================================
+    // 12. ACTUALIZAR DATOS DE MATRÍCULA
     // ======================================================
 
     await client.query(
       `
       UPDATE matriculas
+
       SET
         alumno_id = $1,
         plan_curso_id = $2,
@@ -2316,22 +2571,23 @@ async function procesarTodo(
         fecha_inicio = $5,
         fecha_fin_estimada = $6,
         notas = $7
+
       WHERE id = $8
       `,
       [
         data.alumno_id,
         data.plan_curso_id,
         data.estado_alumno_id,
-        data.fecha_matricula,
-        data.fecha_inicio || null,
-        data.fecha_fin_estimada || null,
+        fechaMatricula,
+        fechaInicio,
+        fechaFinEstimada,
         data.notas || null,
         id
       ]
     );
 
     // ======================================================
-    // 9. VARIABLES DE HISTORIAL
+    // 13. VARIABLES
     // ======================================================
 
     let maquinasEliminadas = [];
@@ -2340,7 +2596,7 @@ async function procesarTodo(
     let maquinasReactivadas = [];
 
     // ======================================================
-    // 10. PROCESAR MÁQUINAS
+    // 14. PROCESAR MÁQUINAS
     // ======================================================
 
     if (
@@ -2348,35 +2604,29 @@ async function procesarTodo(
       cambioMaquinas
     ) {
 
-      // ====================================================
-      // IDS NUEVOS
-      // ====================================================
-
       const idsNuevos =
         new Set(
           maquinasNuevas.map(
             item =>
-              Number(item.maquina_id)
+              Number(
+                item.maquina_id
+              )
           )
         );
-
-      // ====================================================
-      // IDS ACTIVOS ACTUALES
-      // ====================================================
 
       const idsActuales =
         new Set(
           maquinasActuales.map(
             item =>
-              Number(item.maquina_id)
+              Number(
+                item.maquina_id
+              )
           )
         );
 
-      // ====================================================
-      // 10.1 MÁQUINAS QUE SE RETIRAN
-      //
-      // Estaban activas y ya no vienen.
-      // ====================================================
+      // ----------------------------------------------------
+      // RETIRADAS
+      // ----------------------------------------------------
 
       maquinasEliminadas =
         maquinasActuales.filter(
@@ -2388,11 +2638,9 @@ async function procesarTodo(
             )
         );
 
-      // ====================================================
-      // 10.2 MÁQUINAS CONSERVADAS
-      //
-      // Siguen seleccionadas.
-      // ====================================================
+      // ----------------------------------------------------
+      // CONSERVADAS
+      // ----------------------------------------------------
 
       maquinasConservadas =
         maquinasActuales.filter(
@@ -2404,9 +2652,9 @@ async function procesarTodo(
             )
         );
 
-      // ====================================================
-      // 10.3 MARCAR COMO RETIRADAS
-      // ====================================================
+      // ----------------------------------------------------
+      // MARCAR RETIRADAS
+      // ----------------------------------------------------
 
       for (
         const maquina
@@ -2416,8 +2664,9 @@ async function procesarTodo(
         await client.query(
           `
           UPDATE matricula_maquinas
-          SET
-            estado = 'RETIRADA'
+
+          SET estado = 'RETIRADA'
+
           WHERE id = $1
           `,
           [
@@ -2426,22 +2675,9 @@ async function procesarTodo(
         );
       }
 
-      // ====================================================
-      // 10.4 ACTUALIZAR ORDEN DE CONSERVADAS
-      //
-      // IMPORTANTE:
-      //
-      // NO modificamos:
-      //
-      // - sesiones_completadas
-      // - horas_asignadas
-      // - sesiones_totales
-      //
-      // Solo:
-      //
-      // - orden
-      // - es_regalo
-      // ====================================================
+      // ----------------------------------------------------
+      // ACTUALIZAR CONSERVADAS
+      // ----------------------------------------------------
 
       for (
         const nueva
@@ -2466,9 +2702,11 @@ async function procesarTodo(
         await client.query(
           `
           UPDATE matricula_maquinas
+
           SET
             orden = $1,
             es_regalo = $2
+
           WHERE id = $3
           `,
           [
@@ -2479,29 +2717,14 @@ async function procesarTodo(
         );
       }
 
-      // ====================================================
-      // 10.5 PROCESAR CADA MÁQUINA NUEVA
-      //
-      // Aquí tenemos tres posibilidades:
-      //
-      // A) Ya está activa
-      //    → no insertar.
-      //
-      // B) Existe pero está RETIRADA
-      //    → reactivar.
-      //
-      // C) Nunca existió
-      //    → insertar.
-      // ====================================================
+      // ----------------------------------------------------
+      // PROCESAR NUEVAS / REACTIVADAS
+      // ----------------------------------------------------
 
       for (
         const nueva
         of maquinasNuevas
       ) {
-
-        // --------------------------------------------------
-        // BUSCAR CUALQUIER REGISTRO HISTÓRICO
-        // --------------------------------------------------
 
         const existenteResult =
           await client.query(
@@ -2533,42 +2756,28 @@ async function procesarTodo(
         const existente =
           existenteResult.rows[0];
 
-        // ==================================================
-        // CASO A/B: YA EXISTE
-        // ==================================================
+        // --------------------------------------------------
+        // YA EXISTE
+        // --------------------------------------------------
 
         if (existente) {
 
           // -----------------------------------------------
-          // A. YA ESTÁ ACTIVA
+          // ACTIVA
           // -----------------------------------------------
 
           if (
-            String(existente.estado)
-              .toUpperCase() !==
+            String(
+              existente.estado
+            ).toUpperCase() !==
             'RETIRADA'
           ) {
-
-            // Ya fue procesada como conservada.
-            // Solo guardamos referencia para prácticas
-            // si fuera necesario.
-
-            maquinasAgregadas.push({
-              ...nueva,
-              matricula_maquina_id:
-                existente.id,
-              ya_existia: true
-            });
 
             continue;
           }
 
           // -----------------------------------------------
-          // B. ESTABA RETIRADA
-          //
-          // REACTIVAMOS EL MISMO REGISTRO.
-          //
-          // NO INSERTAMOS.
+          // RETIRADA → REACTIVAR
           // -----------------------------------------------
 
           const horasPlan =
@@ -2587,10 +2796,12 @@ async function procesarTodo(
           await client.query(
             `
             UPDATE matricula_maquinas
+
             SET
               orden = $1,
               es_regalo = $2,
               estado = 'PENDIENTE'
+
             WHERE id = $3
             `,
             [
@@ -2602,6 +2813,7 @@ async function procesarTodo(
 
           maquinasReactivadas.push({
             ...nueva,
+
             matricula_maquina_id:
               existente.id
           });
@@ -2609,9 +2821,9 @@ async function procesarTodo(
           continue;
         }
 
-        // ==================================================
-        // CASO C: REALMENTE NUNCA EXISTIÓ
-        // ==================================================
+        // --------------------------------------------------
+        // NUNCA EXISTIÓ → INSERTAR
+        // --------------------------------------------------
 
         const horasPlan =
           await obtenerHorasPlanPorMaquina(
@@ -2630,17 +2842,23 @@ async function procesarTodo(
           await insertarMatriculaMaquina(
             client,
             {
-              matricula_id: id,
+              matricula_id:
+                id,
+
               maquina_id:
                 nueva.maquina_id,
+
               orden:
                 nueva.orden,
+
               es_regalo:
                 nueva.es_regalo,
+
               horas_asignadas:
                 Number(
                   horasPlan.horas
                 ),
+
               sesiones_totales:
                 Number(
                   horasPlan.sesiones_totales
@@ -2650,36 +2868,23 @@ async function procesarTodo(
 
         maquinasAgregadas.push({
           ...nueva,
+
           matricula_maquina_id:
-            nuevaMM.id
+            nuevaMM.id,
+
+          ya_existia:
+            false
         });
       }
 
-      // ====================================================
-      // 10.6 GENERAR PRÁCTICAS
-      //
-      // SOLO para:
-      //
-      // - máquinas realmente nuevas
-      //
-      // NO para:
-      //
-      // - conservadas
-      // - reactivadas
-      //
-      // porque esas ya pueden tener prácticas históricas.
-      // ====================================================
+      // ----------------------------------------------------
+      // PRÁCTICAS SOLO NUEVAS
+      // ----------------------------------------------------
 
       for (
         const nueva
         of maquinasAgregadas
       ) {
-
-        if (
-          nueva.ya_existia
-        ) {
-          continue;
-        }
 
         if (
           !nueva.matricula_maquina_id
@@ -2698,58 +2903,142 @@ async function procesarTodo(
     }
 
     // ======================================================
-    // 11. CAMBIO FINANCIERO
+    // 15. RECALCULAR PLAN FINANCIERO
     //
-    // IMPORTANTE:
-    //
-    // Por ahora SOLO dejamos detectado el cambio.
-    //
-    // Aquí es donde debe entrar la conciliación de cuotas:
-    //
-    // PAGADAS    → conservar
-    // PENDIENTES → recalcular
-    // SOBRANTES  → anular
-    // NUEVAS     → insertar
-    //
+    // SOLO SI REALMENTE CAMBIÓ ALGO FINANCIERO.
     // ======================================================
 
-    if (cambioPlan) {
+    if (cambioFinanciero) {
+
+      const maquinasParaPrecio =
+        seEnvioMaquinas
+          ? maquinasNuevas
+          : maquinasActuales.map(
+              item => ({
+                maquina_id:
+                  Number(
+                    item.maquina_id
+                  ),
+
+                orden:
+                  Number(
+                    item.orden
+                  ),
+
+                es_regalo:
+                  Boolean(
+                    item.es_regalo
+                  )
+              })
+            );
+
+      const planPrecio =
+        await obtenerPlanPrecioVigente(
+          client,
+          data.plan_curso_id,
+          fechaMatricula,
+          maquinasParaPrecio,
+          planActualizado.tipo_curso_codigo
+        );
+
+      if (!planPrecio) {
+
+        throw new Error(
+          'No se encontró un plan de precios activo para el nuevo curso y configuración de máquinas.'
+        );
+      }
+
+      const nombresMaquinas =
+        await obtenerNombresMaquinas(
+          client,
+          maquinasParaPrecio
+        );
 
       // ----------------------------------------------------
-      // AQUÍ NO SE BORRA EL PLAN DE PAGOS ACTUAL.
-      //
-      // La conciliación financiera se debe hacer
-      // respetando los pagos realizados.
+      // SI EXISTE PLAN, SOLO RECALCULA SI NO HAY PAGOS.
       // ----------------------------------------------------
 
-      // Esta parte se implementará con la función
-      // de conciliación de cuotas.
+      if (planPagoActual) {
+
+        await recalcularPlanFinanciero(
+          client,
+          {
+            matriculaId:
+              id,
+
+            planPagoActual,
+
+            planPrecio,
+
+            fechaMatricula,
+
+            fechaInicio,
+
+            fechaFinEstimada,
+
+            modalidadPago:
+              modalidadNueva,
+
+            nombresMaquinas
+          }
+        );
+
+      } else {
+
+        await crearPlanFinanciero(
+          client,
+          {
+            matriculaId:
+              id,
+
+            planPrecio,
+
+            fechaMatricula,
+
+            fechaInicio,
+
+            fechaFinEstimada,
+
+            modalidadPago:
+              modalidadNueva,
+
+            nombresMaquinas
+          }
+        );
+      }
     }
 
     // ======================================================
-    // 12. HISTORIAL
+    // 16. HISTORIAL
     // ======================================================
 
     let descripcion =
       'Se actualizó la matrícula.';
 
     if (cambioPlan) {
+
       descripcion +=
         ' Se cambió el plan de curso.';
     }
 
-    // ====================================================
+    if (cambioModalidad) {
+
+      descripcion +=
+        ` Se cambió la modalidad de pago de ${modalidadActual} a ${modalidadNueva}.`;
+    }
+
+    // ------------------------------------------------------
     // HISTORIAL DE MÁQUINAS
-    // ====================================================
+    // ------------------------------------------------------
 
     if (
       seEnvioMaquinas &&
       cambioMaquinas
     ) {
 
-      // --------------------------------------------------
+      // ----------------------------------------------------
       // CONSERVADAS
-      // --------------------------------------------------
+      // ----------------------------------------------------
 
       if (
         maquinasConservadas.length > 0
@@ -2784,14 +3073,15 @@ async function procesarTodo(
             .join(', ');
 
         if (nombres) {
+
           descripcion +=
             ` Máquinas conservadas: ${nombres}.`;
         }
       }
 
-      // --------------------------------------------------
-      // NUEVAS
-      // --------------------------------------------------
+      // ----------------------------------------------------
+      // NUEVAS / REACTIVADAS
+      // ----------------------------------------------------
 
       const idsNuevas = [
         ...maquinasAgregadas,
@@ -2802,6 +3092,9 @@ async function procesarTodo(
             Number(
               item.maquina_id
             )
+        )
+        .filter(
+          Number.isInteger
         );
 
       if (
@@ -2829,14 +3122,15 @@ async function procesarTodo(
             .join(', ');
 
         if (nombres) {
+
           descripcion +=
             ` Máquinas agregadas/reactivadas: ${nombres}.`;
         }
       }
 
-      // --------------------------------------------------
+      // ----------------------------------------------------
       // RETIRADAS
-      // --------------------------------------------------
+      // ----------------------------------------------------
 
       if (
         maquinasEliminadas.length > 0
@@ -2871,6 +3165,7 @@ async function procesarTodo(
             .join(', ');
 
         if (nombres) {
+
           descripcion +=
             ` Máquinas retiradas: ${nombres}.`;
         }
@@ -2878,30 +3173,38 @@ async function procesarTodo(
     }
 
     // ======================================================
-    // 13. REGISTRAR HISTORIAL
+    // 17. HISTORIAL
     // ======================================================
 
     await registrarHistorial(
       client,
       {
-        matricula_id: id,
-        accion: 'ACTUALIZACION',
+        matricula_id:
+          id,
+
+        accion:
+          'ACTUALIZACION',
+
         descripcion
       },
       user
     );
 
     // ======================================================
-    // 14. COMMIT
+    // 18. COMMIT
     // ======================================================
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
 
     // ======================================================
-    // 15. DEVOLVER MATRÍCULA ACTUALIZADA
+    // 19. DEVOLVER MATRÍCULA
     // ======================================================
 
-    return await obtenerMatriculaPorId(id);
+    return await obtenerMatriculaPorId(
+      id
+    );
 
   } catch (error) {
 
@@ -2918,53 +3221,11 @@ async function procesarTodo(
 }
 
 // ==========================================================
-// OBTENER NOMBRES DE MÁQUINAS
-// ==========================================================
-
-async function obtenerNombresMaquinas(
-  client,
-  maquinas
-) {
-
-  const ids =
-    maquinas
-      .map(
-        item =>
-          Number(
-            item.maquina_id
-          )
-      )
-      .filter(Boolean);
-
-  if (!ids.length) {
-    return [];
-  }
-
-  const result =
-    await client.query(
-      `
-      SELECT
-        id,
-        nombre
-
-      FROM maquinas
-
-      WHERE id = ANY($1::int[])
-
-      ORDER BY nombre
-      `,
-      [ids]
-    );
-
-  return result.rows.map(
-    row =>
-      row.nombre
-  );
-}
-
-
-// ==========================================================
 // REGENERAR TODO
+//
+// Esta función es para regeneración controlada.
+// NO se debe usar sobre una matrícula que ya tenga
+// matrícula-máquinas existentes sin limpiar previamente.
 // ==========================================================
 
 async function regenerarTodo(
@@ -2996,6 +3257,31 @@ async function regenerarTodo(
       plan,
       data.maquinas_seleccionadas
     );
+
+  // --------------------------------------------------------
+  // VALIDAR QUE NO EXISTAN ACTIVAS
+  // --------------------------------------------------------
+
+  const existentes =
+    await client.query(
+      `
+      SELECT id
+      FROM matricula_maquinas
+      WHERE matricula_id = $1
+        AND estado <> 'RETIRADA'
+      LIMIT 1
+      `,
+      [matriculaId]
+    );
+
+  if (
+    existentes.rows.length > 0
+  ) {
+
+    throw new Error(
+      'No se puede regenerar la matrícula porque ya existen máquinas activas. Utiliza la actualización normal.'
+    );
+  }
 
   // --------------------------------------------------------
   // NOMBRES
@@ -3095,20 +3381,32 @@ async function regenerarTodo(
     client,
     {
       matriculaId,
+
       planPrecio,
+
       fechaMatricula:
-        data.fecha_matricula,
+        normalizarFecha(
+          data.fecha_matricula
+        ),
+
       fechaInicio:
-        data.fecha_inicio || null,
+        normalizarFecha(
+          data.fecha_inicio
+        ),
+
       fechaFinEstimada:
-        data.fecha_fin_estimada || null,
+        normalizarFecha(
+          data.fecha_fin_estimada
+        ),
+
       modalidadPago:
-        data.modalidad_pago || 'MENSUAL',
+        data.modalidad_pago ||
+        'MENSUAL',
+
       nombresMaquinas
     }
   );
 }
-
 
 // ==========================================================
 // RESUMEN FINANCIERO
@@ -3138,7 +3436,8 @@ async function obtenerResumenFinanzasMatricula(
 
       WHERE ppa.matricula_id = $1
 
-      ORDER BY ppa.id DESC
+      ORDER BY
+        ppa.id DESC
 
       LIMIT 1
       `,
@@ -3147,7 +3446,6 @@ async function obtenerResumenFinanzasMatricula(
 
   return result.rows[0] || null;
 }
-
 
 // ==========================================================
 // LISTAR CUOTAS
@@ -3213,7 +3511,6 @@ async function listarCuotasDeMatricula(
   return result.rows;
 }
 
-
 // ==========================================================
 // HISTORIAL
 // ==========================================================
@@ -3258,7 +3555,6 @@ async function registrarHistorial(
   );
 }
 
-
 // ==========================================================
 // SUMAR MESES
 // ==========================================================
@@ -3268,14 +3564,30 @@ function sumarMeses(
   meses
 ) {
 
+  const fechaNormalizada =
+    normalizarFecha(
+      fechaBase
+    );
+
+  const partes =
+    String(
+      fechaNormalizada
+    ).split('-');
+
+  if (
+    partes.length !== 3
+  ) {
+
+    throw new Error(
+      'Fecha inválida para calcular cuotas.'
+    );
+  }
+
   const [
     anioStr,
     mesStr,
     diaStr
-  ] =
-    String(
-      fechaBase
-    ).split('-');
+  ] = partes;
 
   const fecha =
     new Date(
@@ -3296,7 +3608,8 @@ function sumarMeses(
   }
 
   fecha.setMonth(
-    fecha.getMonth() + meses
+    fecha.getMonth() +
+    Number(meses)
   );
 
   const anio =
@@ -3315,7 +3628,6 @@ function sumarMeses(
   return `${anio}-${mes}-${dia}`;
 }
 
-
 // ==========================================================
 // SUMAR DÍAS
 // ==========================================================
@@ -3325,14 +3637,30 @@ function sumarDias(
   dias
 ) {
 
+  const fechaNormalizada =
+    normalizarFecha(
+      fechaBase
+    );
+
+  const partes =
+    String(
+      fechaNormalizada
+    ).split('-');
+
+  if (
+    partes.length !== 3
+  ) {
+
+    throw new Error(
+      'Fecha inválida para calcular cuotas.'
+    );
+  }
+
   const [
     anioStr,
     mesStr,
     diaStr
-  ] =
-    String(
-      fechaBase
-    ).split('-');
+  ] = partes;
 
   const fecha =
     new Date(
@@ -3353,7 +3681,8 @@ function sumarDias(
   }
 
   fecha.setDate(
-    fecha.getDate() + dias
+    fecha.getDate() +
+    Number(dias)
   );
 
   const anio =
@@ -3371,7 +3700,6 @@ function sumarDias(
 
   return `${anio}-${mes}-${dia}`;
 }
-
 
 // ==========================================================
 // OBTENER HISTORIAL
@@ -3397,11 +3725,8 @@ async function obtenerHistorial(
   return result.rows;
 }
 
-
 // ==========================================================
 // CREAR PLAN DE PAGO MANUAL
-//
-// ESTE NO SE MODIFICA CON LA LÓGICA AUTOMÁTICA.
 // ==========================================================
 
 async function crearPlanPagoManual({
@@ -3458,11 +3783,8 @@ async function crearPlanPagoManual({
       await client.query(
         `
         SELECT id
-
         FROM planes_pago_alumno
-
         WHERE matricula_id = $1
-
         LIMIT 1
         `,
         [matricula_id]
@@ -3488,6 +3810,65 @@ async function crearPlanPagoManual({
 
       throw new Error(
         'Debe enviar al menos una cuota.'
+      );
+    }
+
+    // ------------------------------------------------------
+    // NORMALIZAR MONTOS
+    // ------------------------------------------------------
+
+    const montoTotal =
+      Number(
+        Number(
+          monto_total
+        ).toFixed(2)
+      );
+
+    const montoMatricula =
+      Number(
+        Number(
+          monto_matricula
+        ).toFixed(2)
+      );
+
+    const montoCertificacion =
+      Number(
+        Number(
+          monto_certificacion
+        ).toFixed(2)
+      );
+
+    const sumaCuotas =
+      Number(
+        cuotas.reduce(
+          (
+            acc,
+            item
+          ) =>
+            acc +
+            Number(
+              item.monto || 0
+            ),
+          0
+        ).toFixed(2)
+      );
+
+    const totalCalculado =
+      Number(
+        (
+          montoMatricula +
+          sumaCuotas +
+          montoCertificacion
+        ).toFixed(2)
+      );
+
+    if (
+      totalCalculado !==
+      montoTotal
+    ) {
+
+      throw new Error(
+        `El plan manual no cierra. Total esperado: ${montoTotal}. Total calculado: ${totalCalculado}.`
       );
     }
 
@@ -3534,24 +3915,14 @@ async function crearPlanPagoManual({
     // DATOS
     // ------------------------------------------------------
 
-    const cantidad_cuotas =
+    const cantidadCuotas =
       cuotas.length;
 
-    const monto_cuota =
+    const montoCuota =
       Number(
         (
-          cuotas.reduce(
-            (
-              acc,
-              item
-            ) =>
-              acc +
-              Number(
-                item.monto || 0
-              ),
-            0
-          ) /
-          cantidad_cuotas
+          sumaCuotas /
+          cantidadCuotas
         ).toFixed(2)
       );
 
@@ -3590,13 +3961,13 @@ async function crearPlanPagoManual({
         `,
         [
           matricula_id,
-          monto_total,
-          monto_matricula,
-          monto_certificacion,
-          cantidad_cuotas,
-          monto_cuota,
+          montoTotal,
+          montoMatricula,
+          montoCertificacion,
+          cantidadCuotas,
+          montoCuota,
           nota_pago,
-          modalidad_pago
+          modalidad_pago || 'MENSUAL'
         ]
       );
 
@@ -3608,9 +3979,7 @@ async function crearPlanPagoManual({
     // ------------------------------------------------------
 
     if (
-      Number(
-        monto_matricula
-      ) > 0
+      montoMatricula > 0
     ) {
 
       await client.query(
@@ -3644,7 +4013,7 @@ async function crearPlanPagoManual({
         [
           planPago.id,
           conceptos.MATRICULA,
-          monto_matricula
+          montoMatricula
         ]
       );
     }
@@ -3657,6 +4026,18 @@ async function crearPlanPagoManual({
       const cuota
       of cuotas
     ) {
+
+      const fecha =
+        normalizarFecha(
+          cuota.fecha_vencimiento ||
+          cuota.fecha_programada
+        );
+
+      if (!fecha) {
+        throw new Error(
+          `La cuota ${cuota.numero_cuota} no tiene una fecha válida.`
+        );
+      }
 
       await client.query(
         `
@@ -3688,10 +4069,19 @@ async function crearPlanPagoManual({
         `,
         [
           planPago.id,
+
           cuota.numero_cuota,
+
           conceptos.CUOTA,
-          cuota.fecha_vencimiento,
-          cuota.monto,
+
+          fecha,
+
+          Number(
+            Number(
+              cuota.monto || 0
+            ).toFixed(2)
+          ),
+
           cuota.observaciones ||
             `Cuota ${cuota.numero_cuota}`
         ]
@@ -3703,15 +4093,25 @@ async function crearPlanPagoManual({
     // ------------------------------------------------------
 
     if (
-      Number(
-        monto_certificacion
-      ) > 0
+      montoCertificacion > 0
     ) {
 
-      const ultimaFecha =
+      const ultimaCuota =
         cuotas[
           cuotas.length - 1
-        ].fecha_vencimiento;
+        ];
+
+      const ultimaFecha =
+        normalizarFecha(
+          ultimaCuota.fecha_vencimiento ||
+          ultimaCuota.fecha_programada
+        );
+
+      if (!ultimaFecha) {
+        throw new Error(
+          'No se pudo determinar la fecha de certificación.'
+        );
+      }
 
       await client.query(
         `
@@ -3745,10 +4145,29 @@ async function crearPlanPagoManual({
           planPago.id,
           conceptos.CERTIFICACION,
           ultimaFecha,
-          monto_certificacion
+          montoCertificacion
         ]
       );
     }
+
+    // ------------------------------------------------------
+    // HISTORIAL
+    // ------------------------------------------------------
+
+    await registrarHistorial(
+      client,
+      {
+        matricula_id:
+          matricula_id,
+
+        accion:
+          'CREACION_PLAN_MANUAL',
+
+        descripcion:
+          'Se creó manualmente el plan de pagos de la matrícula.'
+      },
+      null
+    );
 
     await client.query(
       'COMMIT'
@@ -3775,7 +4194,6 @@ async function crearPlanPagoManual({
     client.release();
   }
 }
-
 
 // ==========================================================
 // EXPORTS
@@ -3808,4 +4226,6 @@ module.exports = {
   obtenerHistorial,
 
   crearPlanPagoManual
+
 };
+
