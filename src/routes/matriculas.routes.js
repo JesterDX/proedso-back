@@ -10,7 +10,7 @@ const router = express.Router();
 
 // --- RUTAS DE LECTURA (Protegidas para que solo usuarios con sesión vean datos) ---
 router.get('/', authMiddleware, controller.listar);
-
+router.post('/previsualizar-cuotas', authMiddleware, controller.previsualizarCuotas);
 router.get('/:id/detalle', authMiddleware, controller.obtenerDetalle);
 router.get('/:id/maquinas', authMiddleware, controller.listarMaquinas);
 router.get('/:id/finanzas', authMiddleware, controller.obtenerFinanzas);
