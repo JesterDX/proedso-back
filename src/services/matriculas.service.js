@@ -1014,13 +1014,14 @@ async function insertarCuota(
 // ==========================================================
 // CALCULAR ESTRUCTURA FINANCIERA
 // ==========================================================
-
 function calcularEstructuraFinanciera(
   planPrecio,
-  modalidadPago
+  modalidadPago,
+  montoTotalPersonalizado = null,
+  cuotaInicialPersonalizada = null
 ) {
 
-  const montoTotal =
+  const montoTotalPlan =
     Number(
       Number(
         planPrecio.monto_total || 0
@@ -1058,47 +1059,130 @@ function calcularEstructuraFinanciera(
       modalidadPago || 'MENSUAL'
     ).toUpperCase();
 
-  if (montoTotal <= 0) {
+
+  // ======================================================
+  // VALIDACIONES BASE
+  // ======================================================
+
+  if (montoTotalPlan <= 0) {
+
     throw new Error(
       'El monto total del plan de precio no es válido.'
     );
+
   }
 
   if (cantidadCuotasBase <= 0) {
+
     throw new Error(
       'El plan de precio no tiene una cantidad válida de cuotas.'
     );
+
   }
 
   if (montoCuotaBase <= 0) {
+
     throw new Error(
       'El plan de precio no tiene un monto de cuota válido.'
     );
+
   }
+
+
+  // ======================================================
+  // MONTO TOTAL
+  // ======================================================
+
+  const montoTotal =
+    montoTotalPersonalizado !== null &&
+    montoTotalPersonalizado !== undefined &&
+    Number(montoTotalPersonalizado) > 0
+
+      ? Number(
+          Number(
+            montoTotalPersonalizado
+          ).toFixed(2)
+        )
+
+      : montoTotalPlan;
+
+
+  // ======================================================
+  // CUOTA INICIAL
+  // ======================================================
+
+  const cuotaInicial =
+    cuotaInicialPersonalizada !== null &&
+    cuotaInicialPersonalizada !== undefined
+
+      ? Number(
+          Number(
+            cuotaInicialPersonalizada
+          ).toFixed(2)
+        )
+
+      : montoMatricula;
+
+
+  if (cuotaInicial < 0) {
+
+    throw new Error(
+      'La cuota inicial no puede ser negativa.'
+    );
+
+  }
+
+
+  if (cuotaInicial >= montoTotal) {
+
+    throw new Error(
+      'La cuota inicial debe ser menor al monto total.'
+    );
+
+  }
+
+
+  // ======================================================
+  // CANTIDAD DE CUOTAS
+  // ======================================================
 
   const cantidadCuotasFinal =
     modalidad === 'QUINCENAL'
       ? cantidadCuotasBase * 2
       : cantidadCuotasBase;
 
+
+  // ======================================================
+  // MONTO DISPONIBLE
+  // ======================================================
+
   const montoDisponibleParaCuotas =
     Number(
       (
         montoTotal -
-        montoMatricula -
+        cuotaInicial -
         montoCertificacion
       ).toFixed(2)
     );
 
+
   if (
     montoDisponibleParaCuotas <= 0
   ) {
+
     throw new Error(
       'El monto destinado a cuotas no es válido.'
     );
+
   }
 
+
+  // ======================================================
+  // MONTO BASE DE CADA CUOTA
+  // ======================================================
+
   let montoCuotaBaseFinal;
+
 
   if (
     modalidad === 'QUINCENAL'
@@ -1117,19 +1201,29 @@ function calcularEstructuraFinanciera(
       Number(
         montoCuotaBase.toFixed(2)
       );
+
   }
+
 
   if (
     montoCuotaBaseFinal <= 0
   ) {
+
     throw new Error(
       'El monto calculado de la cuota no es válido.'
     );
+
   }
+
+
+  // ======================================================
+  // GENERAR CUOTAS
+  // ======================================================
 
   const cuotas = [];
 
   let acumulado = 0;
+
 
   for (
     let i = 1;
@@ -1138,6 +1232,7 @@ function calcularEstructuraFinanciera(
   ) {
 
     let monto;
+
 
     if (
       i === cantidadCuotasFinal
@@ -1155,13 +1250,20 @@ function calcularEstructuraFinanciera(
 
       monto =
         montoCuotaBaseFinal;
+
     }
 
-    if (monto <= 0) {
+
+    if (
+      monto <= 0
+    ) {
+
       throw new Error(
         `La cuota ${i} resultó con un monto inválido (${monto}).`
       );
+
     }
+
 
     acumulado =
       Number(
@@ -1170,20 +1272,33 @@ function calcularEstructuraFinanciera(
         ).toFixed(2)
       );
 
+
     cuotas.push({
-      numero_cuota: i,
-      monto
+
+      numero_cuota:
+        i,
+
+      monto:
+        monto
+
     });
+
   }
+
+
+  // ======================================================
+  // VALIDAR CIERRE
+  // ======================================================
 
   const totalCalculado =
     Number(
       (
-        montoMatricula +
+        cuotaInicial +
         acumulado +
         montoCertificacion
       ).toFixed(2)
     );
+
 
   if (
     totalCalculado !==
@@ -1195,24 +1310,42 @@ function calcularEstructuraFinanciera(
     throw new Error(
       `El plan de pagos no cierra. Total esperado: ${montoTotal}. Total calculado: ${totalCalculado}.`
     );
+
   }
 
+
+  // ======================================================
+  // RESPUESTA
+  // ======================================================
+
   return {
+
     montoTotal,
+
     montoMatricula,
+
+    cuotaInicial,
+
     montoCertificacion,
+
     cantidadCuotasBase,
+
     cantidadCuotasFinal,
+
     montoCuotaBase,
+
     montoCuotaFinal:
       cuotas.length > 0
         ? cuotas[0].monto
         : montoCuotaBaseFinal,
-    cuotas,
-    modalidad
-  };
-}
 
+    cuotas,
+
+    modalidad
+
+  };
+
+}
 // ==========================================================
 // GENERAR FECHAS DE CUOTAS
 // ==========================================================
