@@ -1,76 +1,144 @@
+
 const express = require('express');
+
 const router = express.Router();
 
-const pagosController = require('../controllers/pagos.controller');
-const uploadPago = require('../middlewares/upload-pagos.middleware');
+const pagosController =
+    require('../controllers/pagos.controller');
+
+const uploadPago =
+    require('../middlewares/upload-pagos.middleware');
 
 
-// ===============================
+// =====================================================
 // RUTAS ESPECÍFICAS
-// ===============================
+// =====================================================
 
-router.get('/resumen', pagosController.resumen);
-
-router.get('/buscar-matriculas', pagosController.buscarMatriculas);
-
-router.post('/recalcular-plan', pagosController.recalcularPlan);
-
-router.post('/manual', pagosController.crearPlanPagoManual);
-
-router.put('/actualizar-fechas', pagosController.actualizarFechas);
-
-
-// ===============================
-// CUOTAS
-// ===============================
-
-router.put(
-  '/cuotas/:cuota_id',
-  pagosController.editarCuota
+// Resumen general
+router.get(
+    '/resumen',
+    pagosController.resumen
 );
 
 
-// ===============================
-// PAGOS
-// ===============================
+// Buscar matrículas
+router.get(
+    '/buscar-matriculas',
+    pagosController.buscarMatriculas
+);
 
-router.get('/', pagosController.listar);
+
+// =====================================================
+// CAMBIO DE PLAN
+// =====================================================
+
+// Previsualizar cambio SIN modificar BD
+router.post(
+    '/previsualizar-cambio-plan',
+    pagosController.previsualizarCambioPlan
+);
+
+
+// Aplicar cambio definitivamente
+router.post(
+    '/cambiar-plan',
+    pagosController.cambiarPlan
+);
+
+
+// =====================================================
+// RECALCULAR PLAN EXISTENTE
+// =====================================================
 
 router.post(
-  '/',
-  uploadPago.single('comprobante'),
-  pagosController.registrar
+    '/recalcular-plan',
+    pagosController.recalcularPlan
 );
 
 
-// ===============================
-// HISTORIAL / DETALLE
-// ===============================
+// =====================================================
+// CREAR PLAN MANUAL
+// =====================================================
 
-router.get(
-  '/:id/historial',
-  pagosController.historial
-);
-
-router.get(
-  '/:id',
-  pagosController.listarDetallePorMatricula
+router.post(
+    '/manual',
+    pagosController.crearPlanPagoManual
 );
 
 
-// ===============================
-// EDITAR / ELIMINAR PAGO
-// ===============================
+// =====================================================
+// ACTUALIZAR FECHAS
+// =====================================================
 
 router.put(
-  '/:id',
-  uploadPago.single('comprobante'),
-  pagosController.editar
+    '/actualizar-fechas',
+    pagosController.actualizarFechas
 );
+
+
+// =====================================================
+// CUOTAS
+// =====================================================
+
+router.put(
+    '/cuotas/:cuota_id',
+    pagosController.editarCuota
+);
+
+
+// =====================================================
+// PAGOS
+// =====================================================
+
+// Listar pagos
+router.get(
+    '/',
+    pagosController.listar
+);
+
+
+// Registrar pago
+router.post(
+    '/',
+    uploadPago.single('comprobante'),
+    pagosController.registrar
+);
+
+
+// =====================================================
+// HISTORIAL / DETALLE
+// =====================================================
+
+// Historial de pagos de una matrícula
+router.get(
+    '/:id/historial',
+    pagosController.historial
+);
+
+
+// Detalle de cuotas de una matrícula
+router.get(
+    '/:id',
+    pagosController.listarDetallePorMatricula
+);
+
+
+// =====================================================
+// EDITAR / ELIMINAR PAGO
+// =====================================================
+
+router.put(
+    '/:id',
+    uploadPago.single('comprobante'),
+    pagosController.editar
+);
+
+
 router.delete(
-  '/:id',
-  pagosController.eliminar
+    '/:id',
+    pagosController.eliminar
 );
 
 
 module.exports = router;
+
