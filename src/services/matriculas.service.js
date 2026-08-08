@@ -4201,128 +4201,6 @@ async function crearPlanPagoManual({
 // Solo calcula cómo quedará el plan.
 // ==========================================================
 
-function calcularPrevisualizacionPlanPago({
-  monto_matricula = 0,
-  monto_cuota = 0,
-  cantidad_cuotas = 0,
-  monto_certificacion = 0
-}) {
-
-  const montoMatricula =
-    Number(
-      Number(monto_matricula || 0).toFixed(2)
-    );
-
-  const montoCuota =
-    Number(
-      Number(monto_cuota || 0).toFixed(2)
-    );
-
-  const cantidadCuotas =
-    Number(cantidad_cuotas || 0);
-
-  const montoCertificacion =
-    Number(
-      Number(monto_certificacion || 0).toFixed(2)
-    );
-
-  // --------------------------------------------------------
-  // VALIDACIONES
-  // --------------------------------------------------------
-
-  if (montoMatricula < 0) {
-    throw new Error(
-      'El monto de matrícula no puede ser negativo.'
-    );
-  }
-
-  if (montoCuota <= 0) {
-    throw new Error(
-      'El monto de la cuota mensual debe ser mayor a 0.'
-    );
-  }
-
-  if (
-    !Number.isInteger(cantidadCuotas) ||
-    cantidadCuotas <= 0
-  ) {
-    throw new Error(
-      'La cantidad de cuotas debe ser un número entero mayor a 0.'
-    );
-  }
-
-  if (montoCertificacion < 0) {
-    throw new Error(
-      'El monto de certificación no puede ser negativo.'
-    );
-  }
-
-  // --------------------------------------------------------
-  // CALCULAR TOTAL DE CUOTAS
-  // --------------------------------------------------------
-
-  const totalCuotas =
-    Number(
-      (
-        montoCuota *
-        cantidadCuotas
-      ).toFixed(2)
-    );
-
-  // --------------------------------------------------------
-  // CALCULAR TOTAL DEL PLAN
-  // --------------------------------------------------------
-
-  const montoTotal =
-    Number(
-      (
-        montoMatricula +
-        totalCuotas +
-        montoCertificacion
-      ).toFixed(2)
-    );
-
-  // --------------------------------------------------------
-  // GENERAR DETALLE DE CUOTAS
-  // --------------------------------------------------------
-
-  const cuotas = [];
-
-  for (
-    let i = 1;
-    i <= cantidadCuotas;
-    i++
-  ) {
-
-    cuotas.push({
-      numero_cuota: i,
-      monto: montoCuota
-    });
-  }
-
-  return {
-    monto_matricula:
-      montoMatricula,
-
-    monto_cuota:
-      montoCuota,
-
-    cantidad_cuotas:
-      cantidadCuotas,
-
-    monto_certificacion:
-      montoCertificacion,
-
-    total_cuotas:
-      totalCuotas,
-
-    monto_total:
-      montoTotal,
-
-    cuotas
-  };
-}
-
 
 // ==========================================================
 // PREVISUALIZAR PLAN DE PAGOS
@@ -4330,24 +4208,330 @@ function calcularPrevisualizacionPlanPago({
 // NO INSERTA NADA EN BD.
 // ==========================================================
 
+
+async function calcularPrevisualizacionPlanPago(
+  data
+) {
+
+  const client = await pool.connect();
+
+  try {
+
+    // ------------------------------------------------------
+    // 1. DATOS NORMALIZADOS
+    // ------------------------------------------------------
+
+    const fechaMatricula =
+      normalizarFecha(
+        data.fecha_matricula
+      );
+
+    const fechaInicio =
+      normalizarFecha(
+        data.fecha_inicio
+      );
+
+    const fechaFinEstimada =
+      normalizarFecha(
+        data.fecha_fin_estimada
+      );
+
+    if (!fechaMatricula) {
+      throw new Error(
+        'La fecha de matrícula es obligatoria.'
+      );
+    }
+
+    // ------------------------------------------------------
+    // 2. OBTENER PLAN
+    // ------------------------------------------------------
+
+    const plan =
+      await obtenerPlanCursoDetalle(
+        client,
+        data.plan_curso_id
+      );
+
+    if (!plan) {
+      throw new Error(
+        'No se encontró el plan de curso.'
+      );
+    }
+
+    // ------------------------------------------------------
+    // 3. DETERMINAR MÁQUINAS
+    // ------------------------------------------------------
+
+    const maquinasAGuardar =
+      await determinarMaquinas(
+        client,
+        plan,
+        data.maquinas_seleccionadas
+      );
+
+    // ------------------------------------------------------
+    // 4. OBTENER HORAS Y SESIONES
+    // ------------------------------------------------------
+
+    const maquinasDetalle = [];
+
+    for (
+      const item
+      of maquinasAGuardar
+    ) {
+
+      const maquinaResult =
+        await client.query(
+          `
+          SELECT
+            id,
+            nombre
+          FROM maquinas
+          WHERE id = $1
+          LIMIT 1
+          `,
+          [
+            item.maquina_id
+          ]
+        );
+
+      const maquina =
+        maquinaResult.rows[0];
+
+      if (!maquina) {
+        throw new Error(
+          `No se encontró la máquina ID ${item.maquina_id}.`
+        );
+      }
+
+      const horasPlan =
+        await obtenerHorasPlanPorMaquina(
+          client,
+          data.plan_curso_id,
+          item.maquina_id
+        );
+
+      if (!horasPlan) {
+        throw new Error(
+          `No existe configuración de horas prácticas para la máquina "${maquina.nombre}".`
+        );
+      }
+
+      maquinasDetalle.push({
+        maquina_id:
+          Number(item.maquina_id),
+
+        nombre:
+          maquina.nombre,
+
+        orden:
+          Number(item.orden),
+
+        es_regalo:
+          Boolean(item.es_regalo),
+
+        horas_asignadas:
+          Number(horasPlan.horas),
+
+        sesiones_totales:
+          Number(horasPlan.sesiones_totales)
+      });
+    }
+
+    // ------------------------------------------------------
+    // 5. OBTENER PRECIO VIGENTE
+    // ------------------------------------------------------
+
+    const planPrecio =
+      await obtenerPlanPrecioVigente(
+        client,
+        data.plan_curso_id,
+        fechaMatricula,
+        maquinasAGuardar,
+        plan.tipo_curso_codigo
+      );
+
+    if (!planPrecio) {
+      throw new Error(
+        'No se encontró un plan de precios activo para este curso y configuración de máquinas.'
+      );
+    }
+
+    // ------------------------------------------------------
+    // 6. CALCULAR ESTRUCTURA FINANCIERA
+    // ------------------------------------------------------
+
+    const modalidadPago =
+      String(
+        data.modalidad_pago ||
+        'MENSUAL'
+      ).toUpperCase();
+
+    const financiera =
+      calcularEstructuraFinanciera(
+        planPrecio,
+        modalidadPago
+      );
+
+    // ------------------------------------------------------
+    // 7. GENERAR FECHAS DE CUOTAS
+    // ------------------------------------------------------
+
+    const fechaBaseCuotas =
+      normalizarFecha(
+        fechaInicio ||
+        fechaMatricula
+      );
+
+    if (!fechaBaseCuotas) {
+      throw new Error(
+        'No existe una fecha base para generar las cuotas.'
+      );
+    }
+
+    const cuotasConFechas =
+      generarFechasCuotas(
+        fechaBaseCuotas,
+        financiera.cuotas,
+        financiera.modalidad
+      );
+
+    // ------------------------------------------------------
+    // 8. FECHA DE CERTIFICACIÓN
+    // ------------------------------------------------------
+
+    let fechaCertificacion = null;
+
+    if (
+      financiera.montoCertificacion > 0
+    ) {
+
+      fechaCertificacion =
+        normalizarFecha(
+          fechaFinEstimada
+        ) ||
+        sumarMeses(
+          fechaBaseCuotas,
+          financiera.cantidadCuotasBase
+        );
+    }
+
+    // ------------------------------------------------------
+    // 9. DEVOLVER PREVISUALIZACIÓN
+    // ------------------------------------------------------
+
+    return {
+
+      plan: {
+        id:
+          plan.id,
+
+        codigo:
+          plan.codigo,
+
+        nombre:
+          plan.nombre,
+
+        tipo_curso_codigo:
+          plan.tipo_curso_codigo,
+
+        tipo_curso_nombre:
+          plan.tipo_curso_nombre,
+
+        cantidad_maquinas:
+          Number(
+            plan.cantidad_maquinas
+          )
+      },
+
+      precio: {
+        id:
+          planPrecio.id,
+
+        nombre:
+          planPrecio.nombre,
+
+        monto_total:
+          financiera.montoTotal,
+
+        matricula:
+          financiera.montoMatricula,
+
+        certificacion:
+          financiera.montoCertificacion,
+
+        cantidad_cuotas:
+          financiera.cantidadCuotasFinal,
+
+        monto_cuota:
+          financiera.montoCuotaFinal
+      },
+
+      modalidad_pago:
+        financiera.modalidad,
+
+      maquinas:
+        maquinasDetalle,
+
+      cuotas:
+        cuotasConFechas,
+
+      fecha_certificacion:
+        fechaCertificacion,
+
+      resumen: {
+        monto_total:
+          financiera.montoTotal,
+
+        monto_matricula:
+          financiera.montoMatricula,
+
+        monto_certificacion:
+          financiera.montoCertificacion,
+
+        cantidad_cuotas:
+          financiera.cantidadCuotasFinal,
+
+        monto_cuota:
+          financiera.montoCuotaFinal,
+
+        modalidad:
+          financiera.modalidad
+      }
+
+    };
+
+  } finally {
+
+    client.release();
+
+  }
+}
+
+
 async function previsualizarPlanPago(data) {
 
-  const preview =
-    calcularPrevisualizacionPlanPago({
-      monto_matricula:
-        data.monto_matricula,
+  if (!data) {
+    throw new Error(
+      'No se recibieron datos para la previsualización.'
+    );
+  }
 
-      monto_cuota:
-        data.monto_cuota,
+  if (!data.plan_curso_id) {
+    throw new Error(
+      'El plan de curso es obligatorio.'
+    );
+  }
 
-      cantidad_cuotas:
-        data.cantidad_cuotas,
+  if (!data.fecha_matricula) {
+    throw new Error(
+      'La fecha de matrícula es obligatoria.'
+    );
+  }
 
-      monto_certificacion:
-        data.monto_certificacion
-    });
-
-  return preview;
+  return await calcularPrevisualizacionPlanPago(
+    data
+  );
 }
 // ==========================================================
 // EXPORTS
