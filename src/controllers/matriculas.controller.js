@@ -277,60 +277,42 @@ async function obtenerFinanzas(req, res) {
   }
 }
 
+// ==========================================================
+// PREVISUALIZAR PLAN DE PAGOS
+// ==========================================================
 
-async function previsualizarCuotas(req, res) {
+async function previsualizarPlanPagoController(
+  req,
+  res
+) {
+
   try {
 
-    const {
-      plan_curso_id,
-      fecha_matricula,
-      monto_total,
-      cuota_inicial
-    } = req.body;
+    const preview =
+      await previsualizarPlanPago(
+        req.body
+      );
 
-    if (!plan_curso_id) {
-      return res.status(400).json({
-        ok: false,
-        message: 'El plan de curso es obligatorio.'
-      });
-    }
-
-    if (!fecha_matricula) {
-      return res.status(400).json({
-        ok: false,
-        message: 'La fecha de matrícula es obligatoria.'
-      });
-    }
-
-    const cuotas =
-      await matriculasService.previsualizarCuotas({
-        plan_curso_id,
-        fecha_matricula,
-        monto_total,
-        cuota_inicial
-      });
-
-    res.json({
+    return res.json({
       ok: true,
-      data: cuotas
+      data: preview
     });
 
   } catch (error) {
 
     console.error(
-      'Error al previsualizar cuotas:',
+      'Error al previsualizar plan de pagos:',
       error
     );
 
-    res.status(500).json({
+    return res.status(400).json({
       ok: false,
-      message:
+      mensaje:
         error.message ||
-        'Error al previsualizar cuotas.'
+        'No se pudo calcular la previsualización del plan de pagos.'
     });
   }
 }
-
 module.exports = {
   listar,
   obtenerPorId,
@@ -341,6 +323,6 @@ module.exports = {
   obtenerFinanzas,
   actualizar,
   obtenerHistorial,
-  previsualizarCuotas
+  previsualizarPlanPagoController
 };
 
