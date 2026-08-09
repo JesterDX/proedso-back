@@ -1014,11 +1014,14 @@ async function insertarCuota(
 // ==========================================================
 // CALCULAR ESTRUCTURA FINANCIERA
 // ==========================================================
+// ==========================================================
+// CALCULAR ESTRUCTURA FINANCIERA
+// ==========================================================
 function calcularEstructuraFinanciera(
   planPrecio,
   modalidadPago,
-  montoTotalPersonalizado = null,
-  cuotaInicialPersonalizada = null,
+  montoCuotaPersonalizada = null,
+  matriculaPersonalizada = null,
   certificacionIncluidaPersonalizada = null,
   costoCertificacionPersonalizado = null
 ) {
@@ -1027,9 +1030,9 @@ function calcularEstructuraFinanciera(
   // 1. VALORES BASE DEL PLAN
   // ======================================================
 
-  const montoTotalPlan =
+  const montoCuotaPlan =
     Number(
-      Number(planPrecio.monto_total || 0).toFixed(2)
+      Number(planPrecio.monto_cuota || 0).toFixed(2)
     );
 
   const montoMatriculaPlan =
@@ -1045,33 +1048,23 @@ function calcularEstructuraFinanciera(
   const cantidadCuotasBase =
     Number(planPrecio.cantidad_cuotas || 0);
 
-  const montoCuotaBase =
-    Number(
-      Number(planPrecio.monto_cuota || 0).toFixed(2)
-    );
-
   const modalidad =
     String(modalidadPago || 'MENSUAL').toUpperCase();
+
 
   // ======================================================
   // 2. VALIDACIONES DEL PLAN
   // ======================================================
 
-  if (montoTotalPlan <= 0) {
+  if (montoCuotaPlan <= 0) {
     throw new Error(
-      'El monto total del plan de precio no es válido.'
+      'El monto de la cuota del plan no es válido.'
     );
   }
 
   if (cantidadCuotasBase <= 0) {
     throw new Error(
       'El plan de precio no tiene una cantidad válida de cuotas.'
-    );
-  }
-
-  if (montoCuotaBase <= 0) {
-    throw new Error(
-      'El plan de precio no tiene un monto de cuota válido.'
     );
   }
 
@@ -1084,68 +1077,70 @@ function calcularEstructuraFinanciera(
     );
   }
 
+
   // ======================================================
-  // 3. TOTAL PERSONALIZADO
+  // 3. MONTO DE CADA CUOTA
   // ======================================================
 
-  const montoTotal =
-    montoTotalPersonalizado !== null &&
-    montoTotalPersonalizado !== undefined &&
-    montoTotalPersonalizado !== '' &&
-    Number(montoTotalPersonalizado) >= 0
+  const montoCuota =
+    montoCuotaPersonalizada !== null &&
+    montoCuotaPersonalizada !== undefined &&
+    montoCuotaPersonalizada !== ''
 
       ? Number(
-          Number(montoTotalPersonalizado).toFixed(2)
+          Number(montoCuotaPersonalizada).toFixed(2)
         )
 
-      : montoTotalPlan;
+      : montoCuotaPlan;
+
+
+  if (montoCuota <= 0) {
+    throw new Error(
+      'El monto de la cuota no puede ser menor o igual a cero.'
+    );
+  }
+
 
   // ======================================================
-  // 4. MATRÍCULA / CUOTA INICIAL
+  // 4. MATRÍCULA
   // ======================================================
 
-  const cuotaInicial =
-    cuotaInicialPersonalizada !== null &&
-    cuotaInicialPersonalizada !== undefined &&
-    cuotaInicialPersonalizada !== ''
+  const montoMatricula =
+    matriculaPersonalizada !== null &&
+    matriculaPersonalizada !== undefined &&
+    matriculaPersonalizada !== ''
 
       ? Number(
-          Number(cuotaInicialPersonalizada).toFixed(2)
+          Number(matriculaPersonalizada).toFixed(2)
         )
 
       : montoMatriculaPlan;
 
-  if (cuotaInicial < 0) {
+
+  if (montoMatricula < 0) {
     throw new Error(
-      'La cuota inicial no puede ser negativa.'
+      'El monto de matrícula no puede ser negativo.'
     );
   }
 
-  if (cuotaInicial >= montoTotal) {
-    throw new Error(
-      'La cuota inicial debe ser menor al monto total.'
-    );
-  }
 
   // ======================================================
   // 5. CERTIFICACIÓN
   // ======================================================
 
-  let montoCertificacion;
+  let montoCertificacion = 0;
+
+  let certificacionIncluida = false;
 
   if (
     certificacionIncluidaPersonalizada !== null &&
     certificacionIncluidaPersonalizada !== undefined
   ) {
 
-    const incluida =
+    certificacionIncluida =
       Boolean(certificacionIncluidaPersonalizada);
 
-    if (!incluida) {
-
-      montoCertificacion = 0;
-
-    } else {
+    if (certificacionIncluida) {
 
       montoCertificacion =
         costoCertificacionPersonalizado !== null &&
@@ -1163,20 +1158,24 @@ function calcularEstructuraFinanciera(
 
   } else {
 
-    // Si no se especificó personalización,
-    // usamos la configuración del plan.
+    // Configuración original del plan
 
     montoCertificacion =
       Number(
         montoCertificacionPlan.toFixed(2)
       );
+
+    certificacionIncluida =
+      montoCertificacion > 0;
   }
+
 
   if (montoCertificacion < 0) {
     throw new Error(
       'El costo de certificación no puede ser negativo.'
     );
   }
+
 
   // ======================================================
   // 6. CANTIDAD DE CUOTAS
@@ -1187,61 +1186,35 @@ function calcularEstructuraFinanciera(
       ? cantidadCuotasBase * 2
       : cantidadCuotasBase;
 
-  // ======================================================
-  // 7. DINERO DISPONIBLE PARA CUOTAS
-  // ======================================================
-
-  const montoDisponibleParaCuotas =
-    Number(
-      (
-        montoTotal -
-        cuotaInicial -
-        montoCertificacion
-      ).toFixed(2)
-    );
-
-  if (montoDisponibleParaCuotas <= 0) {
-    throw new Error(
-      'El monto destinado a cuotas no es válido.'
-    );
-  }
 
   // ======================================================
-  // 8. CUOTA BASE
+  // 7. MONTO DE CADA CUOTA
   // ======================================================
 
-  let montoCuotaBaseFinal;
+  const montoCuotaFinal =
+    modalidad === 'QUINCENAL'
+      ? Number(
+          (montoCuota / 2).toFixed(2)
+        )
+      : Number(
+          montoCuota.toFixed(2)
+        );
 
-  if (modalidad === 'QUINCENAL') {
 
-    montoCuotaBaseFinal =
-      Number(
-        (
-          montoCuotaBase / 2
-        ).toFixed(2)
-      );
-
-  } else {
-
-    montoCuotaBaseFinal =
-      Number(
-        montoCuotaBase.toFixed(2)
-      );
-  }
-
-  if (montoCuotaBaseFinal <= 0) {
+  if (montoCuotaFinal <= 0) {
     throw new Error(
       'El monto calculado de la cuota no es válido.'
     );
   }
 
+
   // ======================================================
-  // 9. GENERAR CUOTAS
+  // 8. GENERAR CUOTAS
   // ======================================================
 
   const cuotas = [];
 
-  let acumulado = 0;
+  let acumuladoCuotas = 0;
 
   for (
     let i = 1;
@@ -1249,37 +1222,14 @@ function calcularEstructuraFinanciera(
     i++
   ) {
 
-    let monto;
+    const monto =
+      montoCuotaFinal;
 
-    if (i === cantidadCuotasFinal) {
-
-      // La última cuota absorbe cualquier diferencia
-      // por redondeo.
-
-      monto =
-        Number(
-          (
-            montoDisponibleParaCuotas -
-            acumulado
-          ).toFixed(2)
-        );
-
-    } else {
-
-      monto =
-        montoCuotaBaseFinal;
-    }
-
-    if (monto <= 0) {
-      throw new Error(
-        `La cuota ${i} resultó con un monto inválido (${monto}).`
-      );
-    }
-
-    acumulado =
+    acumuladoCuotas =
       Number(
         (
-          acumulado + monto
+          acumuladoCuotas +
+          monto
         ).toFixed(2)
       );
 
@@ -1289,68 +1239,59 @@ function calcularEstructuraFinanciera(
     });
   }
 
+
   // ======================================================
-  // 10. VALIDAR QUE EL PLAN CIERRE
+  // 9. CALCULAR TOTAL REAL
   // ======================================================
 
-  const totalCalculado =
+  const montoTotal =
     Number(
       (
-        cuotaInicial +
-        acumulado +
+        montoMatricula +
+        acumuladoCuotas +
         montoCertificacion
       ).toFixed(2)
     );
 
-  const totalEsperado =
-    Number(
-      montoTotal.toFixed(2)
-    );
-
-  if (totalCalculado !== totalEsperado) {
-
-    throw new Error(
-      `El plan de pagos no cierra. ` +
-      `Total esperado: ${totalEsperado}. ` +
-      `Total calculado: ${totalCalculado}.`
-    );
-  }
 
   // ======================================================
-  // 11. RESPUESTA
+  // 10. RESPUESTA
   // ======================================================
 
   return {
 
+    // Total REAL de la matrícula
     montoTotal,
 
-    montoMatricula:
-      cuotaInicial,
+    // Monto individual de la cuota
+    montoCuota:
+      montoCuotaFinal,
 
-    cuotaInicial,
+    montoCuotaFinal:
+      montoCuotaFinal,
 
+    // Matrícula
+    montoMatricula,
+
+    cuotaInicial:
+      montoMatricula,
+
+    // Certificación
     montoCertificacion,
 
+    certificacionIncluida,
+
+    // Cantidades
     cantidadCuotasBase,
 
     cantidadCuotasFinal,
 
-    montoCuotaBase,
-
-    montoCuotaFinal:
-      cuotas.length > 0
-        ? cuotas[0].monto
-        : montoCuotaBaseFinal,
-
+    // Cuotas
     cuotas,
 
-    modalidad,
-
-    certificacionIncluida:
-      montoCertificacion > 0
+    modalidad
   };
 }
-
 // ==========================================================
 // GENERAR FECHAS DE CUOTAS
 // ==========================================================
