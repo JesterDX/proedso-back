@@ -471,9 +471,16 @@ async function actualizarMatricula(
       );
 
 
-    // =====================================================
-    // 4. DETERMINAR SI VIENE INFORMACIÓN FINANCIERA
-    // =====================================================
+// =====================================================
+// 4. DETERMINAR SI VIENE INFORMACIÓN FINANCIERA
+// =====================================================
+
+console.log('========================================');
+console.log('🔥 ACTUALIZAR MATRÍCULA');
+console.log('🔥 ID:', id);
+console.log('🔥 DATA RECIBIDA:', JSON.stringify(data, null, 2));
+console.log('🔥 PLAN PAGO ACTUAL:', planPagoActual);
+console.log('========================================');
 
 const vieneFinanciero =
   data.monto_total !== undefined ||
@@ -482,16 +489,21 @@ const vieneFinanciero =
   data.costo_certificacion !== undefined ||
   data.modalidad_pago !== undefined;
 
+console.log('🔥 VIENE FINANCIERO:', vieneFinanciero);
+
+console.log(
+  '🔥 CONDICIÓN RECALCULO:',
+  vieneFinanciero && !!planPagoActual
+);
+
+if (
+  vieneFinanciero &&
+  planPagoActual
+) {
+
+  console.log('🔥🔥🔥 ENTRÓ AL RECÁLCULO FINANCIERO 🔥🔥🔥');
 
 
-    // =====================================================
-    // 5. RECALCULAR PLAN FINANCIERO
-    // =====================================================
-
-    if (
-      vieneFinanciero &&
-      planPagoActual
-    ) {
 
       // ---------------------------------------------------
       // 5.1 OBTENER MÁQUINAS ACTUALES
