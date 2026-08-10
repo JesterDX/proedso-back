@@ -7117,6 +7117,10 @@ if (!fechaBaseCuotas) {
   );
 
 }
+console.log('🟡 ANTES DE generarFechasCuotas');
+console.log('🟡 fechaBaseCuotas:', fechaBaseCuotas);
+console.log('🟡 financiera.cuotas:', financiera.cuotas);
+console.log('🟡 financiera.modalidad:', financiera.modalidad);
 
 const cuotasConFechas =
   generarFechasCuotas(
@@ -7125,6 +7129,11 @@ const cuotasConFechas =
     financiera.modalidad
   );
 
+console.log('🟢 DESPUÉS DE generarFechasCuotas');
+console.log(
+  '🟢 cuotasConFechas:',
+  JSON.stringify(cuotasConFechas, null, 2)
+);
 
 // ------------------------------------------------------
 // 8. FECHA DE CERTIFICACIÓN
