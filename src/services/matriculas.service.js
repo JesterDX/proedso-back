@@ -1728,6 +1728,7 @@ async function validarPlanSinPagos(
   }
 }
 
+
 // ==========================================================
 // CREAR PLAN FINANCIERO COMPLETO
 // ==========================================================
@@ -1743,22 +1744,36 @@ async function crearPlanFinanciero(
     nombresMaquinas = [],
 
     // ======================================================
-    // IMPORTANTE
+    // VALORES PERSONALIZADOS DEL FRONT
     //
-    // montoTotalPersonalizado viene del campo
-    // "monto_total" del frontend, pero en realidad
-    // representa EL MONTO DE CADA CUOTA.
+    // IMPORTANTE:
+    //
+    // montoCuotaPersonalizada
+    //     = monto de CADA cuota mensual
+    //
+    // matriculaPersonalizada
+    //     = costo de matrícula
+    //
+    // certificacionIncluidaPersonalizada
+    //     = si se cobra certificación
+    //
+    // costoCertificacionPersonalizado
+    //     = costo de certificación
     // ======================================================
 
-    montoTotalPersonalizado = null,
+    montoCuotaPersonalizada = null,
 
-    cuotaInicialPersonalizada = null,
+    matriculaPersonalizada = null,
 
     certificacionIncluidaPersonalizada = null,
 
     costoCertificacionPersonalizado = null
   }
 ) {
+
+  // ======================================================
+  // CONCEPTOS
+  // ======================================================
 
   const conceptoMatricula =
     await obtenerConceptoCobroPorCodigo(
@@ -1794,8 +1809,11 @@ async function crearPlanFinanciero(
   // ======================================================
   // CALCULAR ESTRUCTURA FINANCIERA
   //
-  // montoTotalPersonalizado realmente significa:
-  // MONTO DE CADA CUOTA
+  // AQUÍ:
+  //
+  // montoCuotaPersonalizada = S/ 300
+  // matriculaPersonalizada  = S/ 20
+  // certificación           = S/ 10
   // ======================================================
 
   const financiera =
@@ -1804,18 +1822,57 @@ async function crearPlanFinanciero(
 
       modalidadPago,
 
-      // MONTO DE CADA CUOTA
-      montoTotalPersonalizado,
+      montoCuotaPersonalizada,
 
-      // MATRÍCULA
-      cuotaInicialPersonalizada,
+      matriculaPersonalizada,
 
-      // CERTIFICACIÓN
       certificacionIncluidaPersonalizada,
 
-      // COSTO CERTIFICACIÓN
       costoCertificacionPersonalizado
     );
+
+
+  // ======================================================
+  // DEBUG
+  // ======================================================
+
+  console.log('');
+  console.log('========================================');
+  console.log('💰 ESTRUCTURA FINANCIERA FINAL');
+  console.log('========================================');
+
+  console.log(
+    '📌 Monto cuota:',
+    financiera.montoCuotaFinal
+  );
+
+  console.log(
+    '📌 Matrícula:',
+    financiera.montoMatricula
+  );
+
+  console.log(
+    '📌 Certificación:',
+    financiera.montoCertificacion
+  );
+
+  console.log(
+    '📌 Cantidad cuotas:',
+    financiera.cantidadCuotasFinal
+  );
+
+  console.log(
+    '📌 Total REAL:',
+    financiera.montoTotal
+  );
+
+  console.log(
+    '📋 Cuotas:',
+    financiera.cuotas
+  );
+
+  console.log('========================================');
+  console.log('');
 
 
   // ======================================================
@@ -1838,7 +1895,7 @@ async function crearPlanFinanciero(
 
 
   // ======================================================
-  // GENERAR FECHAS
+  // GENERAR FECHAS DE CUOTAS
   // ======================================================
 
   const cuotasConFechas =
@@ -1858,7 +1915,7 @@ async function crearPlanFinanciero(
 
 
   // ======================================================
-  // INSERTAR PLAN DE PAGO
+  // CREAR PLAN DE PAGO
   // ======================================================
 
   const planPagoAlumno =
@@ -1871,21 +1928,41 @@ async function crearPlanFinanciero(
         plan_precio_id:
           planPrecio.id,
 
-        // ESTE SÍ ES EL TOTAL REAL
-        // matrícula + cuotas + certificación
+        // ==================================================
+        // TOTAL REAL
+        //
+        // Ejemplo:
+        // 20 + (300 × 8) + 10 = 2430
+        // ==================================================
+
         monto_total:
           financiera.montoTotal,
+
+        // ==================================================
+        // MATRÍCULA
+        // ==================================================
 
         monto_matricula:
           financiera.montoMatricula,
 
+        // ==================================================
+        // CERTIFICACIÓN
+        // ==================================================
+
         monto_certificacion:
           financiera.montoCertificacion,
+
+        // ==================================================
+        // CANTIDAD DE CUOTAS
+        // ==================================================
 
         cantidad_cuotas:
           financiera.cantidadCuotasFinal,
 
+        // ==================================================
         // MONTO DE CADA CUOTA
+        // ==================================================
+
         monto_cuota:
           financiera.montoCuotaFinal,
 
@@ -1899,7 +1976,7 @@ async function crearPlanFinanciero(
 
 
   // ======================================================
-  // MATRÍCULA
+  // CUOTA DE MATRÍCULA
   // ======================================================
 
   if (
@@ -1936,7 +2013,7 @@ async function crearPlanFinanciero(
 
 
   // ======================================================
-  // CUOTAS
+  // CUOTAS MENSUALES / QUINCENALES
   // ======================================================
 
   for (
@@ -2018,6 +2095,10 @@ async function crearPlanFinanciero(
 
   }
 
+
+  // ======================================================
+  // RETORNAR PLAN CREADO
+  // ======================================================
 
   return planPagoAlumno;
 }
@@ -2858,15 +2939,19 @@ await crearPlanFinanciero(
 
     nombresMaquinas,
 
-    montoTotalPersonalizado:
+    // S/ 300 = cuota mensual
+    montoCuotaPersonalizada:
       data.monto_total,
 
-    cuotaInicialPersonalizada:
+    // S/ 20 = matrícula
+    matriculaPersonalizada:
       data.cuota_inicial,
 
+    // true
     certificacionIncluidaPersonalizada:
       data.certificacion_incluida,
 
+    // S/ 10
     costoCertificacionPersonalizado:
       data.costo_certificacion
   }
