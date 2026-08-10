@@ -670,39 +670,41 @@ const costoCertificacion =
       // ---------------------------------------------------
 
      await recalcularPlanFinancieroConPagos(
-  client,
-  {
+        client,
+        {
+      
+          planPagoActual,
+      
+          planPrecio,
+      
+          fechaMatricula:
+            data.fecha_matricula,
+      
+          fechaInicio:
+            data.fecha_inicio,
+      
+          fechaFinEstimada:
+            data.fecha_fin_estimada,
+      
+          modalidadPago,
+      
+          nombresMaquinas,
+      
+          montoCuotaPersonalizada:
+            montoCuota,
+      
+          matriculaPersonalizada:
+            montoMatricula,
+      
+          certificacionIncluidaPersonalizada:
+            certificacionIncluida,
+      
+          costoCertificacionPersonalizado:
+            costoCertificacion
+        }
+      );
+}
 
-    planPagoActual,
-
-    planPrecio,
-
-    fechaMatricula:
-      data.fecha_matricula,
-
-    fechaInicio:
-      data.fecha_inicio,
-
-    fechaFinEstimada:
-      data.fecha_fin_estimada,
-
-    modalidadPago,
-
-    nombresMaquinas,
-
-    montoCuotaPersonalizada:
-      montoCuota,
-
-    matriculaPersonalizada:
-      montoMatricula,
-
-    certificacionIncluidaPersonalizada:
-      certificacionIncluida,
-
-    costoCertificacionPersonalizado:
-      costoCertificacion
-  }
-);
     // =====================================================
     // 6. HISTORIAL
     // =====================================================
