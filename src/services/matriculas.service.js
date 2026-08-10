@@ -643,9 +643,6 @@ if (
       .filter(Boolean);
 
 
-  // ---------------------------------------------------
-  // 5.6 RECALCULAR PLAN FINANCIERO
-  // ---------------------------------------------------
 await recalcularPlanFinanciero(
   client,
   {
@@ -681,10 +678,14 @@ await recalcularPlanFinanciero(
     costoCertificacionPersonalizado:
       costoCertificacion,
 
-    cuotasPersonalizadas:
+    // =================================================
+    // CRONOGRAMA CONFIRMADO POR EL FRONT
+    // =================================================
+    cronogramaConfirmado:
       data.cuotas_personalizadas || null
   }
 );
+
 }
 
     // =====================================================
