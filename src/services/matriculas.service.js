@@ -1698,6 +1698,7 @@ async function crearPlanFinanciero(
 // RECALCULAR PLAN FINANCIERO
 //
 // SOLO si NO existen pagos.
+// Respeta los valores personalizados enviados desde el Front.
 // ==========================================================
 
 async function recalcularPlanFinanciero(
@@ -1710,9 +1711,22 @@ async function recalcularPlanFinanciero(
     fechaInicio,
     fechaFinEstimada,
     modalidadPago,
-    nombresMaquinas = []
+    nombresMaquinas = [],
+
+    // ======================================================
+    // VALORES PERSONALIZADOS DEL FRONT
+    // ======================================================
+
+    montoCuotaPersonalizada = null,
+    matriculaPersonalizada = null,
+    certificacionIncluidaPersonalizada = null,
+    costoCertificacionPersonalizado = null
   }
 ) {
+
+  // ========================================================
+  // SI NO EXISTE PLAN DE PAGO
+  // ========================================================
 
   if (!planPagoActual) {
 
@@ -1725,31 +1739,64 @@ async function recalcularPlanFinanciero(
         fechaInicio,
         fechaFinEstimada,
         modalidadPago,
-        nombresMaquinas
+        nombresMaquinas,
+
+        montoTotalPersonalizado:
+          montoCuotaPersonalizada,
+
+        cuotaInicialPersonalizada:
+          matriculaPersonalizada,
+
+        certificacionIncluidaPersonalizada,
+
+        costoCertificacionPersonalizado
       }
     );
   }
+
+
+  // ========================================================
+  // VALIDAR QUE NO EXISTAN PAGOS
+  // ========================================================
 
   await validarPlanSinPagos(
     client,
     planPagoActual.id
   );
 
-  await client.query(
-    `
-    DELETE FROM cuotas
-    WHERE plan_pago_alumno_id = $1
-    `,
-    [
-      planPagoActual.id
-    ]
-  );
+
+  // ========================================================
+  // CALCULAR NUEVA ESTRUCTURA FINANCIERA
+  //
+  // IMPORTANTE:
+  //
+  // montoCuotaPersonalizada
+  //     = monto de cada cuota
+  //
+  // matriculaPersonalizada
+  //     = matrícula inicial
+  //
+  // ========================================================
 
   const financiera =
     calcularEstructuraFinanciera(
       planPrecio,
-      modalidadPago
+
+      modalidadPago,
+
+      montoCuotaPersonalizada,
+
+      matriculaPersonalizada,
+
+      certificacionIncluidaPersonalizada,
+
+      costoCertificacionPersonalizado
     );
+
+
+  // ========================================================
+  // FECHA BASE
+  // ========================================================
 
   const fechaBaseCuotas =
     normalizarFecha(
@@ -1758,10 +1805,16 @@ async function recalcularPlanFinanciero(
     );
 
   if (!fechaBaseCuotas) {
+
     throw new Error(
       'No existe una fecha base para generar las cuotas.'
     );
   }
+
+
+  // ========================================================
+  // GENERAR FECHAS
+  // ========================================================
 
   const cuotasConFechas =
     generarFechasCuotas(
@@ -1770,37 +1823,18 @@ async function recalcularPlanFinanciero(
       financiera.modalidad
     );
 
+
+  // ========================================================
+  // NOTA
+  // ========================================================
+
   const notaPago =
     `${planPrecio.nombre} - Máquinas: ${nombresMaquinas.join(', ')}`;
 
-  await client.query(
-    `
-    UPDATE planes_pago_alumno
 
-    SET
-      plan_precio_id = $1,
-      monto_total = $2,
-      monto_matricula = $3,
-      monto_certificacion = $4,
-      cantidad_cuotas = $5,
-      monto_cuota = $6,
-      nota_pago = $7,
-      modalidad_pago = $8
-
-    WHERE id = $9
-    `,
-    [
-      planPrecio.id,
-      financiera.montoTotal,
-      financiera.montoMatricula,
-      financiera.montoCertificacion,
-      financiera.cantidadCuotasFinal,
-      financiera.montoCuotaFinal,
-      notaPago,
-      financiera.modalidad,
-      planPagoActual.id
-    ]
-  );
+  // ========================================================
+  // OBTENER CONCEPTOS
+  // ========================================================
 
   const conceptoMatricula =
     await obtenerConceptoCobroPorCodigo(
@@ -1831,9 +1865,74 @@ async function recalcularPlanFinanciero(
     );
   }
 
-  // --------------------------------------------------------
-  // MATRÍCULA
-  // --------------------------------------------------------
+
+  // ========================================================
+  // BORRAR CUOTAS ANTERIORES
+  // ========================================================
+
+  await client.query(
+    `
+    DELETE FROM cuotas
+    WHERE plan_pago_alumno_id = $1
+    `,
+    [
+      planPagoActual.id
+    ]
+  );
+
+
+  // ========================================================
+  // ACTUALIZAR PLAN DE PAGO
+  // ========================================================
+
+  await client.query(
+    `
+    UPDATE planes_pago_alumno
+
+    SET
+      plan_precio_id = $1,
+      monto_total = $2,
+      monto_matricula = $3,
+      monto_certificacion = $4,
+      cantidad_cuotas = $5,
+      monto_cuota = $6,
+      nota_pago = $7,
+      modalidad_pago = $8
+
+    WHERE id = $9
+    `,
+    [
+
+      planPrecio.id,
+
+      // TOTAL REAL:
+      // matrícula + cuotas + certificación
+      financiera.montoTotal,
+
+      // MATRÍCULA
+      financiera.montoMatricula,
+
+      // CERTIFICACIÓN
+      financiera.montoCertificacion,
+
+      // CANTIDAD DE CUOTAS
+      financiera.cantidadCuotasFinal,
+
+      // MONTO DE CADA CUOTA
+      financiera.montoCuotaFinal,
+
+      notaPago,
+
+      financiera.modalidad,
+
+      planPagoActual.id
+    ]
+  );
+
+
+  // ========================================================
+  // INSERTAR MATRÍCULA
+  // ========================================================
 
   if (
     financiera.montoMatricula > 0
@@ -1866,9 +1965,10 @@ async function recalcularPlanFinanciero(
     );
   }
 
-  // --------------------------------------------------------
-  // CUOTAS
-  // --------------------------------------------------------
+
+  // ========================================================
+  // INSERTAR CUOTAS
+  // ========================================================
 
   for (
     const cuota
@@ -1902,9 +2002,10 @@ async function recalcularPlanFinanciero(
     );
   }
 
-  // --------------------------------------------------------
-  // CERTIFICACIÓN
-  // --------------------------------------------------------
+
+  // ========================================================
+  // INSERTAR CERTIFICACIÓN
+  // ========================================================
 
   if (
     financiera.montoCertificacion > 0
@@ -1946,11 +2047,17 @@ async function recalcularPlanFinanciero(
     );
   }
 
+
+  // ========================================================
+  // DEVOLVER PLAN ACTUALIZADO
+  // ========================================================
+
   return await obtenerPlanPagoAlumno(
     client,
     matriculaId
   );
 }
+
 
 // ==========================================================
 // DETERMINAR MÁQUINAS
