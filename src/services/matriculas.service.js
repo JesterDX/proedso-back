@@ -375,7 +375,6 @@ async function actualizarEstadoMatricula(
 // ==========================================================
 // ACTUALIZAR MATRÍCULA SIMPLE
 // ==========================================================
-
 async function actualizarMatricula(
   id,
   data,
@@ -388,6 +387,10 @@ async function actualizarMatricula(
   try {
 
     await client.query('BEGIN');
+
+    // =====================================================
+    // 1. OBTENER MATRÍCULA ACTUAL
+    // =====================================================
 
     const actualResult =
       await client.query(
@@ -408,6 +411,11 @@ async function actualizarMatricula(
         'Matrícula no encontrada.'
       );
     }
+
+
+    // =====================================================
+    // 2. ACTUALIZAR DATOS BÁSICOS
+    // =====================================================
 
     const result =
       await client.query(
@@ -431,19 +439,123 @@ async function actualizarMatricula(
           data.alumno_id,
           data.plan_curso_id,
           data.estado_alumno_id,
+
           normalizarFecha(
             data.fecha_matricula
           ),
+
           normalizarFecha(
             data.fecha_inicio
           ),
+
           normalizarFecha(
             data.fecha_fin_estimada
           ),
+
           data.notas || null,
+
           id
         ]
       );
+
+
+    // =====================================================
+    // 3. OBTENER PLAN DE PAGO ACTUAL
+    // =====================================================
+
+    const planPagoActual =
+      await obtenerPlanPagoAlumno(
+        client,
+        id
+      );
+
+
+    // =====================================================
+    // 4. DETERMINAR SI VIENE INFORMACIÓN FINANCIERA
+    // =====================================================
+
+    const vieneFinanciero =
+      data.monto_total !== undefined ||
+      data.cuota_inicial !== undefined ||
+      data.certificacion_incluida !== undefined ||
+      data.costo_certificacion !== undefined ||
+      data.monto_cuota !== undefined ||
+      data.modalidad_pago !== undefined;
+
+
+    // =====================================================
+    // 5. ACTUALIZAR PLAN FINANCIERO
+    // =====================================================
+
+    if (
+      vieneFinanciero &&
+      planPagoActual
+    ) {
+
+      // Aquí NO usamos directamente los valores
+      // enviados por Angular.
+      //
+      // Si alguno no viene, conservamos el anterior.
+
+      const montoCuota =
+        data.monto_cuota !== undefined &&
+        data.monto_cuota !== null &&
+        data.monto_cuota !== ''
+          ? data.monto_cuota
+          : planPagoActual.monto_cuota;
+
+
+      const montoMatricula =
+        data.cuota_inicial !== undefined &&
+        data.cuota_inicial !== null &&
+        data.cuota_inicial !== ''
+          ? data.cuota_inicial
+          : planPagoActual.monto_matricula;
+
+
+      const modalidadPago =
+        data.modalidad_pago !== undefined &&
+        data.modalidad_pago !== null &&
+        data.modalidad_pago !== ''
+          ? data.modalidad_pago
+          : planPagoActual.modalidad_pago;
+
+
+      const certificacionIncluida =
+        data.certificacion_incluida !== undefined &&
+        data.certificacion_incluida !== null
+          ? Boolean(
+              data.certificacion_incluida
+            )
+          : Number(
+              planPagoActual.monto_certificacion || 0
+            ) > 0;
+
+
+      const costoCertificacion =
+        data.costo_certificacion !== undefined &&
+        data.costo_certificacion !== null &&
+        data.costo_certificacion !== ''
+          ? data.costo_certificacion
+          : planPagoActual.monto_certificacion;
+
+
+      // ===================================================
+      // AQUÍ FALTA OBTENER EL PLAN PRECIO VIGENTE
+      // Y LAS MÁQUINAS ACTUALES
+      // ===================================================
+
+      // Luego:
+      //
+      // recalcularPlanFinanciero(...)
+      //
+      // pasando estos valores efectivos.
+    }
+
+
+    // =====================================================
+    // 6. HISTORIAL
+    // =====================================================
 
     await registrarHistorial(
       client,
@@ -455,6 +567,7 @@ async function actualizarMatricula(
       },
       user
     );
+
 
     await client.query('COMMIT');
 
@@ -471,9 +584,9 @@ async function actualizarMatricula(
   } finally {
 
     client.release();
+
   }
 }
-
 // ==========================================================
 // OBTENER DETALLE DE MATRÍCULA
 // ==========================================================
