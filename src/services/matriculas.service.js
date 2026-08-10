@@ -561,60 +561,61 @@ async function actualizarMatricula(
           'No se encontró un precio vigente para el plan seleccionado.'
         );
 
-      }
+
+// ---------------------------------------------------
+// 5.4 VALORES PERSONALIZADOS
+//
+// IMPORTANTE:
+//
+// data.monto_total del FRONT representa
+// EL MONTO DE CADA CUOTA.
+//
+// NO representa el total real del plan.
+//
+// ---------------------------------------------------
+
+const montoCuota =
+  data.monto_total !== undefined &&
+  data.monto_total !== null &&
+  data.monto_total !== ''
+    ? data.monto_total
+    : planPagoActual.monto_cuota;
 
 
-      // ---------------------------------------------------
-      // 5.4 VALORES PERSONALIZADOS
-      //
-      // SI VIENE UN VALOR:
-      //     usamos el nuevo.
-      //
-      // SI NO VIENE:
-      //     usamos el valor que ya estaba guardado.
-      // ---------------------------------------------------
-
-      const montoCuota =
-        data.monto_cuota !== undefined &&
-        data.monto_cuota !== null &&
-        data.monto_cuota !== ''
-          ? data.monto_cuota
-          : planPagoActual.monto_cuota;
+const montoMatricula =
+  data.cuota_inicial !== undefined &&
+  data.cuota_inicial !== null &&
+  data.cuota_inicial !== ''
+    ? data.cuota_inicial
+    : planPagoActual.monto_matricula;
 
 
-      const montoMatricula =
-        data.cuota_inicial !== undefined &&
-        data.cuota_inicial !== null &&
-        data.cuota_inicial !== ''
-          ? data.cuota_inicial
-          : planPagoActual.monto_matricula;
+const modalidadPago =
+  data.modalidad_pago !== undefined &&
+  data.modalidad_pago !== null &&
+  data.modalidad_pago !== ''
+    ? data.modalidad_pago
+    : planPagoActual.modalidad_pago;
 
 
-      const modalidadPago =
-        data.modalidad_pago !== undefined &&
-        data.modalidad_pago !== null &&
-        data.modalidad_pago !== ''
-          ? data.modalidad_pago
-          : planPagoActual.modalidad_pago;
+const certificacionIncluida =
+  data.certificacion_incluida !== undefined &&
+  data.certificacion_incluida !== null
+    ? Boolean(
+        data.certificacion_incluida
+      )
+    : Number(
+        planPagoActual.monto_certificacion || 0
+      ) > 0;
 
 
-      const certificacionIncluida =
-        data.certificacion_incluida !== undefined &&
-        data.certificacion_incluida !== null
-          ? Boolean(
-              data.certificacion_incluida
-            )
-          : Number(
-              planPagoActual.monto_certificacion || 0
-            ) > 0;
+const costoCertificacion =
+  data.costo_certificacion !== undefined &&
+  data.costo_certificacion !== null &&
+  data.costo_certificacion !== ''
+    ? data.costo_certificacion
+    : planPagoActual.monto_certificacion;
 
-
-      const costoCertificacion =
-        data.costo_certificacion !== undefined &&
-        data.costo_certificacion !== null &&
-        data.costo_certificacion !== ''
-          ? data.costo_certificacion
-          : planPagoActual.monto_certificacion;
 
 
       // ---------------------------------------------------
