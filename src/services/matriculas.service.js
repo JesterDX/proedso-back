@@ -667,13 +667,10 @@ const costoCertificacion =
 
       // ---------------------------------------------------
       // 5.6 RECALCULAR
-
 await recalcularPlanFinanciero(
   client,
   {
-
-    matriculaId:
-      id,
+    matriculaId: id,
 
     planPagoActual,
 
@@ -704,16 +701,25 @@ await recalcularPlanFinanciero(
     costoCertificacionPersonalizado:
       costoCertificacion,
 
-    // =================================================
-    // FECHAS DEFINIDAS EN LA PREVISUALIZACIÓN
-    // =================================================
+    // ================================================
+    // CRONOGRAMA CONFIRMADO POR EL FRONT
+    // ================================================
+
+    cronogramaConfirmado:
+      Array.isArray(
+        data.cronograma_confirmado
+      )
+        ? data.cronograma_confirmado
+        : null,
+
+    // ================================================
+    // CUOTAS PERSONALIZADAS
+    // ================================================
 
     cuotasPersonalizadas:
       data.cuotas_personalizadas || null
-
   }
 );
-
 }
 
     // =====================================================
