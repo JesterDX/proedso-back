@@ -3058,17 +3058,15 @@ function calcularEstructuraFinanciera(
     modalidad
   };
 }
-
 // ==========================================================
 // GENERAR FECHAS DE CUOTAS
 //
-// REGLAS:
-// MENSUAL   = 20 días
-// QUINCENAL = 14 días
+// MENSUAL   = cada 20 días
+// QUINCENAL = cada 14 días
 //
 // IMPORTANTE:
-// La cuota #1 ocurre DESPUÉS de la matrícula.
-// La matrícula NO cuenta como cuota.
+// La cuota 1 NO vence el mismo día de la matrícula.
+// La cuota 1 vence después del primer intervalo.
 // ==========================================================
 
 function generarFechasCuotas(
@@ -3092,12 +3090,19 @@ function generarFechasCuotas(
       fechaBase
     );
 
+  if (!fechaNormalizada) {
+    throw new Error(
+      'No existe una fecha base válida para generar las cuotas.'
+    );
+  }
+
   return cuotas.map(
     cuota => {
 
       const fecha =
         sumarDias(
           fechaNormalizada,
+
           diasEntreCuotas *
             Number(
               cuota.numero_cuota
