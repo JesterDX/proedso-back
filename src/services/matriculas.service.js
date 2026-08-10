@@ -475,12 +475,13 @@ async function actualizarMatricula(
     // 4. DETERMINAR SI VIENE INFORMACIÓN FINANCIERA
     // =====================================================
 
-    const vieneFinanciero =
-      data.monto_cuota !== undefined ||
-      data.cuota_inicial !== undefined ||
-      data.certificacion_incluida !== undefined ||
-      data.costo_certificacion !== undefined ||
-      data.modalidad_pago !== undefined;
+const vieneFinanciero =
+  data.monto_total !== undefined ||
+  data.cuota_inicial !== undefined ||
+  data.certificacion_incluida !== undefined ||
+  data.costo_certificacion !== undefined ||
+  data.modalidad_pago !== undefined;
+
 
 
     // =====================================================
