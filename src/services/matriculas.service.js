@@ -3051,29 +3051,100 @@ function generarFechasCuotas(
   modalidadPago
 ) {
 
+  console.log('');
+  console.log('========================================');
+  console.log('🚨 ENTRÓ A generarFechasCuotas');
+  console.log('========================================');
+
+  console.log(
+    '🚨 fechaBase recibida:',
+    fechaBase
+  );
+
+  console.log(
+    '🚨 cuotas recibidas:',
+    JSON.stringify(
+      cuotas,
+      null,
+      2
+    )
+  );
+
+  console.log(
+    '🚨 cuotas es array:',
+    Array.isArray(cuotas)
+  );
+
+  console.log(
+    '🚨 modalidad recibida:',
+    modalidadPago
+  );
+
+  console.log('========================================');
+
+
   const modalidad =
     String(
       modalidadPago || 'MENSUAL'
     ).toUpperCase();
+
+  console.log(
+    '🚨 modalidad normalizada:',
+    modalidad
+  );
+
 
   const diasEntreCuotas =
     modalidad === 'QUINCENAL'
       ? 14
       : 20;
 
+  console.log(
+    '🚨 días entre cuotas:',
+    diasEntreCuotas
+  );
+
+
+  console.log(
+    '🚨 ANTES DE normalizarFecha'
+  );
+
   const fechaNormalizada =
     normalizarFecha(
       fechaBase
     );
 
+  console.log(
+    '🚨 DESPUÉS DE normalizarFecha:',
+    fechaNormalizada
+  );
+
+
   if (!fechaNormalizada) {
+
     throw new Error(
       'No existe una fecha base válida para generar las cuotas.'
     );
+
   }
+
+
+  console.log(
+    '🚨 ANTES DE cuotas.map()'
+  );
+
 
   return cuotas.map(
     cuota => {
+
+      console.log(
+        '➡️ Procesando cuota:',
+        JSON.stringify(
+          cuota,
+          null,
+          2
+        )
+      );
 
       const fecha =
         sumarDias(
@@ -3084,6 +3155,11 @@ function generarFechasCuotas(
               cuota.numero_cuota
             )
         );
+
+      console.log(
+        '➡️ Fecha calculada:',
+        fecha
+      );
 
       return {
 
@@ -3099,6 +3175,7 @@ function generarFechasCuotas(
 
     }
   );
+
 }
 
 
@@ -4039,12 +4116,72 @@ async function recalcularPlanFinanciero(
       '🔄 Generando cronograma automáticamente.'
     );
 
-    const cuotasConFechas =
-      generarFechasCuotas(
-        fechaBaseCuotas,
-        financiera.cuotas,
-        financiera.modalidad
-      );
+console.log('');
+console.log('========================================');
+console.log('🟡 GENERANDO FECHAS DE CUOTAS');
+console.log('========================================');
+
+console.log(
+  '🟡 fechaBaseCuotas:',
+  fechaBaseCuotas
+);
+
+console.log(
+  '🟡 financiera:',
+  JSON.stringify(
+    financiera,
+    null,
+    2
+  )
+);
+
+console.log(
+  '🟡 financiera.cuotas:',
+  financiera.cuotas
+);
+
+console.log(
+  '🟡 ¿cuotas es array?:',
+  Array.isArray(
+    financiera.cuotas
+  )
+);
+
+console.log(
+  '🟡 cantidad cuotas:',
+  Array.isArray(financiera.cuotas)
+    ? financiera.cuotas.length
+    : 'NO ES ARRAY'
+);
+
+console.log(
+  '🟡 modalidad:',
+  financiera.modalidad
+);
+
+console.log('========================================');
+
+const cuotasConFechas =
+  generarFechasCuotas(
+    fechaBaseCuotas,
+    financiera.cuotas,
+    financiera.modalidad
+  );
+
+console.log('========================================');
+console.log('🟢 GENERÓ FECHAS CORRECTAMENTE');
+
+console.log(
+  '🟢 cuotasConFechas:',
+  JSON.stringify(
+    cuotasConFechas,
+    null,
+    2
+  )
+);
+
+console.log('========================================');
+
 
     cronogramaFinal = [];
 
