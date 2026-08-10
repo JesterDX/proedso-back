@@ -1,3 +1,4 @@
+
 const pool = require('../config/db');
 
 /**
@@ -164,6 +165,12 @@ async function obtenerNotificacionesPagos() {
 
   const filas = result.rows;
 
+  /**
+   * =========================================================
+   * SEPARAR VENCIDAS Y POR VENCER
+   * =========================================================
+   */
+
   const vencidas = filas.filter(
     item => item.tipo_notificacion === 'VENCIDA'
   );
@@ -174,12 +181,70 @@ async function obtenerNotificacionesPagos() {
 
   /**
    * =========================================================
-   * CANTIDAD DE ALUMNOS ÚNICOS
+   * TRANSFORMAR DATOS AL FORMATO DEL FRONTEND
    * =========================================================
-   *
-   * Una persona puede tener varias cuotas.
-   * Por eso no usamos simplemente filas.length.
    */
+
+  const transformarNotificacion = (item) => {
+
+    const esVencida =
+      item.tipo_notificacion === 'VENCIDA';
+
+    return {
+
+      matricula_id: Number(item.matricula_id),
+
+      alumno_id: Number(item.alumno_id),
+
+      alumno_dni: item.dni,
+
+      alumno_nombres: item.nombres,
+
+      alumno_apellidos: item.apellidos,
+
+      cuota_id: Number(item.cuota_id),
+
+      numero_cuota:
+        item.numero_cuota !== null
+          ? Number(item.numero_cuota)
+          : null,
+
+      concepto_codigo: item.concepto_codigo,
+
+      concepto_nombre: item.concepto_nombre,
+
+      fecha_vencimiento:
+        item.fecha_vencimiento,
+
+      monto_programado:
+        Number(item.monto_programado || 0),
+
+      monto_pagado:
+        Number(item.monto_pagado || 0),
+
+      saldo_pendiente:
+        Number(item.saldo_pendiente || 0),
+
+      tipo:
+        item.tipo_notificacion,
+
+      dias:
+        esVencida
+          ? Number(item.dias_vencida || 0)
+          : Number(item.dias_restantes || 0)
+    };
+  };
+
+  const notificaciones = filas.map(
+    transformarNotificacion
+  );
+
+  /**
+   * =========================================================
+   * CANTIDADES
+   * =========================================================
+   */
+
   const alumnosIds = new Set(
     filas.map(item => Number(item.alumno_id))
   );
@@ -192,22 +257,37 @@ async function obtenerNotificacionesPagos() {
     porVencer.map(item => Number(item.alumno_id))
   );
 
+  /**
+   * =========================================================
+   * RESPUESTA
+   * =========================================================
+   *
+   * IMPORTANTE:
+   * Esta estructura coincide exactamente con
+   * ResumenNotificaciones del frontend.
+   */
+
   return {
+
+    /**
+     * Cantidad de cuotas vencidas
+     */
+    vencidas: vencidas.length,
+
+    /**
+     * Cantidad de cuotas próximas a vencer
+     */
+    por_vencer: porVencer.length,
 
     /**
      * Cantidad total de cuotas notificables
      */
-    cantidad: filas.length,
+    total: filas.length,
 
     /**
      * Cantidad de alumnos únicos
      */
     cantidad_alumnos: alumnosIds.size,
-
-    /**
-     * Cantidad de cuotas vencidas
-     */
-    cantidad_vencidas: vencidas.length,
 
     /**
      * Cantidad de alumnos con cuotas vencidas
@@ -216,35 +296,25 @@ async function obtenerNotificacionesPagos() {
       alumnosVencidosIds.size,
 
     /**
-     * Cantidad de cuotas próximas a vencer
-     */
-    cantidad_por_vencer:
-      porVencer.length,
-
-    /**
      * Cantidad de alumnos con cuotas próximas
      */
     cantidad_alumnos_por_vencer:
       alumnosPorVencerIds.size,
 
     /**
-     * Cuotas vencidas
+     * Todas las notificaciones
      */
-    vencidas,
-
-    /**
-     * Cuotas próximas a vencer
-     */
-    por_vencer: porVencer
+    notificaciones
   };
 }
-
 
 /**
  * =========================================================
  * EXPORTAR
  * =========================================================
  */
+
 module.exports = {
   obtenerNotificacionesPagos
 };
+
