@@ -2660,6 +2660,10 @@ async function recalcularPlanFinancieroConPagos(
 // ==========================================================
 // GENERAR FECHA DE UNA CUOTA
 // ==========================================================
+// ==========================================================
+// GENERAR FECHA DE UNA CUOTA
+// MISMA REGLA USADA POR LA PREVISUALIZACIÓN
+// ==========================================================
 
 function generarFechaCuotaIndividual(
   fechaBase,
@@ -2672,24 +2676,23 @@ function generarFechaCuotaIndividual(
       `${fechaBase}T00:00:00`
     );
 
-  if (
-    modalidad === 'QUINCENAL'
-  ) {
+  const modalidadNormalizada =
+    String(
+      modalidad || 'MENSUAL'
+    ).toUpperCase();
 
-    const dias =
-      numero * 15;
+  const diasEntreCuotas =
+    modalidadNormalizada === 'QUINCENAL'
+      ? 15
+      : 20;
 
-    fecha.setDate(
-      fecha.getDate() + dias
-    );
+  const dias =
+    (numero - 1) *
+    diasEntreCuotas;
 
-  } else {
-
-    fecha.setMonth(
-      fecha.getMonth() + numero
-    );
-
-  }
+  fecha.setDate(
+    fecha.getDate() + dias
+  );
 
   return fecha
     .toISOString()
