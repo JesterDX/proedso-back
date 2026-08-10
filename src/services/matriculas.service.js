@@ -6685,27 +6685,21 @@ if (
 
 }
 
-
 // ------------------------------------------------------
-// 9. CRONOGRAMA COMPLETO
-//
-// ESTE ES EL CRONOGRAMA QUE EL FRONTEND DEBE MOSTRAR
-// Y QUE POSTERIORMENTE DEBE ENVIAR AL GUARDAR.
-//
-// Matrícula
-// Cuotas
-// Certificación
+// 9. CONSTRUIR CRONOGRAMA COMPLETO
 // ------------------------------------------------------
 
-const cronograma = [
+const cronograma = [];
 
-  // ----------------------------------------------------
-  // MATRÍCULA
-  // ----------------------------------------------------
+// ------------------------------------------------------
+// MATRÍCULA
+// ------------------------------------------------------
 
-  {
-    tipo:
-      'MATRICULA',
+if (
+  financiera.montoMatricula > 0
+) {
+
+  cronograma.push({
 
     numero_cuota:
       0,
@@ -6713,89 +6707,100 @@ const cronograma = [
     concepto:
       'Matrícula',
 
-    monto:
-      Number(
-        financiera.montoMatricula || 0
-      ),
+    fecha_vencimiento:
+      fechaMatricula,
 
     fecha_programada:
       fechaMatricula,
 
+    monto:
+      financiera.montoMatricula,
+
+    estado:
+      'PENDIENTE'
+
+  });
+
+}
+
+// ------------------------------------------------------
+// CUOTAS MENSUALES
+// ------------------------------------------------------
+
+for (
+  let i = 0;
+  i < cuotasConFechas.length;
+  i++
+) {
+
+  const cuota =
+    cuotasConFechas[i];
+
+  cronograma.push({
+
+    numero_cuota:
+      i + 1,
+
+    concepto:
+      'Cuota mensual',
+
     fecha_vencimiento:
-      fechaMatricula
-  },
+      cuota.fecha_vencimiento ??
+      cuota.fecha_programada ??
+      cuota.fecha,
 
+    fecha_programada:
+      cuota.fecha_programada ??
+      cuota.fecha_vencimiento ??
+      cuota.fecha,
 
-  // ----------------------------------------------------
-  // CUOTAS
-  // ----------------------------------------------------
+    monto:
+      Number(
+        cuota.monto ??
+        cuota.monto_cuota ??
+        cuota.importe ??
+        0
+      ),
 
-  ...cuotasConFechas.map(
-    cuota => ({
+    estado:
+      'PENDIENTE'
 
-      tipo:
-        'CUOTA',
+  });
 
-      numero_cuota:
-        Number(
-          cuota.numero_cuota
-        ),
+}
 
-      concepto:
-        'Cuota mensual',
+// ------------------------------------------------------
+// CERTIFICACIÓN
+// ------------------------------------------------------
 
-      monto:
-        Number(
-          cuota.monto || 0
-        ),
+if (
+  financiera.montoCertificacion > 0 &&
+  fechaCertificacion
+) {
 
-      fecha_programada:
-        cuota.fecha_programada,
+  cronograma.push({
 
-      fecha_vencimiento:
-        cuota.fecha_vencimiento
+    numero_cuota:
+      null,
 
-    })
-  ),
+    concepto:
+      'Certificación',
 
+    fecha_vencimiento:
+      fechaCertificacion,
 
-  // ----------------------------------------------------
-  // CERTIFICACIÓN
-  // ----------------------------------------------------
+    fecha_programada:
+      fechaCertificacion,
 
-  ...(Number(
-    financiera.montoCertificacion || 0
-  ) > 0
-    ? [
+    monto:
+      financiera.montoCertificacion,
 
-        {
-          tipo:
-            'CERTIFICACION',
+    estado:
+      'PENDIENTE'
 
-          numero_cuota:
-            null,
+  });
 
-          concepto:
-            'Certificación',
-
-          monto:
-            Number(
-              financiera.montoCertificacion
-            ),
-
-          fecha_programada:
-            fechaCertificacion,
-
-          fecha_vencimiento:
-            fechaCertificacion
-
-        }
-
-      ]
-
-    : [])
-
-];
+}
 
 
 // ------------------------------------------------------
@@ -6859,14 +6864,17 @@ return {
   maquinas:
     maquinasDetalle,
 
+  // Cuotas mensuales originales
   cuotas:
     cuotasConFechas,
 
-  cronograma:
-    cronograma,
-
+  // Fecha de certificación
   fecha_certificacion:
     fechaCertificacion,
+
+  // Cronograma completo
+  cronograma:
+    cronograma,
 
   resumen: {
 
@@ -6891,14 +6899,6 @@ return {
   }
 
 };
-
-} finally {
-
-  client.release();
-
-}
-
-}
 
 async function previsualizarPlanPago(data) {
 
