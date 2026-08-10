@@ -382,8 +382,11 @@ async function actualizarMatricula(
   user = null
 ) {
 
-  const client =
-    await pool.connect();
+  console.log('🔥🔥🔥 ENTRÓ A actualizarMatricula 🔥🔥🔥');
+  console.log('🆔 ID:', id);
+  console.log('📦 DATA RECIBIDA:', JSON.stringify(data, null, 2));
+
+  const client = await pool.connect();
 
   try {
 
