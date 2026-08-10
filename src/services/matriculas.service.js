@@ -646,49 +646,45 @@ if (
   // ---------------------------------------------------
   // 5.6 RECALCULAR PLAN FINANCIERO
   // ---------------------------------------------------
+await recalcularPlanFinanciero(
+  client,
+  {
+    matriculaId:
+      id,
 
-  await recalcularPlanFinanciero(
-    client,
-    {
-      matriculaId: id,
+    planPagoActual,
 
-      planPagoActual,
+    planPrecio,
 
-      planPrecio,
+    fechaMatricula:
+      data.fecha_matricula,
 
-      fechaMatricula:
-        data.fecha_matricula,
+    fechaInicio:
+      data.fecha_inicio,
 
-      fechaInicio:
-        data.fecha_inicio,
+    fechaFinEstimada:
+      data.fecha_fin_estimada,
 
-      fechaFinEstimada:
-        data.fecha_fin_estimada,
+    modalidadPago,
 
-      modalidadPago,
+    nombresMaquinas,
 
-      nombresMaquinas,
+    montoCuotaPersonalizada:
+      montoCuota,
 
-      montoCuotaPersonalizada:
-        montoCuota,
+    matriculaPersonalizada:
+      montoMatricula,
 
-      matriculaPersonalizada:
-        montoMatricula,
+    certificacionIncluidaPersonalizada:
+      certificacionIncluida,
 
-      certificacionIncluidaPersonalizada:
-        certificacionIncluida,
+    costoCertificacionPersonalizado:
+      costoCertificacion,
 
-      costoCertificacionPersonalizado:
-        costoCertificacion,
-
-      // =================================================
-      // CRONOGRAMA CONFIRMADO POR EL FRONT
-      // =================================================
-
-      cronogramaConfirmado:
-        data.cuotas_personalizadas || null
-    }
-  );
+    cuotasPersonalizadas:
+      data.cuotas_personalizadas || null
+  }
+);
 }
 
     // =====================================================
