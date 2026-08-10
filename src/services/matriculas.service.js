@@ -642,6 +642,30 @@ if (
       .map(fila => fila.nombre)
       .filter(Boolean);
 
+  console.log('');
+console.log('========================================');
+console.log('🔥🔥🔥 CRONOGRAMA QUE LLEGA AL UPDATE');
+console.log('========================================');
+
+console.log(
+  '📦 data.cuotas_personalizadas:',
+  JSON.stringify(
+    data.cuotas_personalizadas,
+    null,
+    2
+  )
+);
+
+console.log(
+  '📦 data.cronograma_confirmado:',
+  JSON.stringify(
+    data.cronograma_confirmado,
+    null,
+    2
+  )
+);
+
+console.log('========================================');
 
 await recalcularPlanFinanciero(
   client,
