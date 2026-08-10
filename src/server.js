@@ -23,7 +23,7 @@ const homologacionPagosRoutes =
 require('./routes/homologacion-pagos.routes');
 const homologacionMaquinasRoutes =
 require('./routes/homologacion-maquinas.routes');
-
+const notificacionesRoutes = require('./routes/notificaciones.routes');
 app.disable('etag');
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -104,6 +104,11 @@ app.use(
 
     homologacionMaquinasRoutes
 
+);
+
+app.use(
+  '/api/notificaciones',
+  notificacionesRoutes
 );
 const PORT = process.env.PORT || 4000;
 
