@@ -6802,103 +6802,91 @@ if (
 
 }
 
+  // ------------------------------------------------------
+  // 10. DEVOLVER PREVISUALIZACIÓN
+  // ------------------------------------------------------
 
-// ------------------------------------------------------
-// 10. DEVOLVER PREVISUALIZACIÓN
-// ------------------------------------------------------
+  return {
 
-return {
+    plan: {
+      id: plan.id,
+      codigo: plan.codigo,
+      nombre: plan.nombre,
 
-  plan: {
+      tipo_curso_codigo:
+        plan.tipo_curso_codigo,
 
-    id:
-      plan.id,
+      tipo_curso_nombre:
+        plan.tipo_curso_nombre,
 
-    codigo:
-      plan.codigo,
+      cantidad_maquinas:
+        Number(plan.cantidad_maquinas)
+    },
 
-    nombre:
-      plan.nombre,
+    precio: {
+      id: planPrecio.id,
+      nombre: planPrecio.nombre,
 
-    tipo_curso_codigo:
-      plan.tipo_curso_codigo,
+      monto_total:
+        financiera.montoTotal,
 
-    tipo_curso_nombre:
-      plan.tipo_curso_nombre,
+      matricula:
+        financiera.montoMatricula,
 
-    cantidad_maquinas:
-      Number(
-        plan.cantidad_maquinas
-      )
+      certificacion:
+        financiera.montoCertificacion,
 
-  },
+      cantidad_cuotas:
+        financiera.cantidadCuotasFinal,
 
-  precio: {
+      monto_cuota:
+        financiera.montoCuotaFinal
+    },
 
-    id:
-      planPrecio.id,
+    modalidad_pago:
+      financiera.modalidad,
 
-    nombre:
-      planPrecio.nombre,
+    maquinas:
+      maquinasDetalle,
 
-    monto_total:
-      financiera.montoTotal,
+    cuotas:
+      cuotasConFechas,
 
-    matricula:
-      financiera.montoMatricula,
+    fecha_certificacion:
+      fechaCertificacion,
 
-    certificacion:
-      financiera.montoCertificacion,
+    cronograma:
+      cronograma,
 
-    cantidad_cuotas:
-      financiera.cantidadCuotasFinal,
+    resumen: {
+      monto_total:
+        financiera.montoTotal,
 
-    monto_cuota:
-      financiera.montoCuotaFinal
+      monto_matricula:
+        financiera.montoMatricula,
 
-  },
+      monto_certificacion:
+        financiera.montoCertificacion,
 
-  modalidad_pago:
-    financiera.modalidad,
+      cantidad_cuotas:
+        financiera.cantidadCuotasFinal,
 
-  maquinas:
-    maquinasDetalle,
+      monto_cuota:
+        financiera.montoCuotaFinal,
 
-  // Cuotas mensuales originales
-  cuotas:
-    cuotasConFechas,
+      modalidad:
+        financiera.modalidad
+    }
 
-  // Fecha de certificación
-  fecha_certificacion:
-    fechaCertificacion,
+  };
 
-  // Cronograma completo
-  cronograma:
-    cronograma,
+} finally {
 
-  resumen: {
+  client.release();
 
-    monto_total:
-      financiera.montoTotal,
+}
 
-    monto_matricula:
-      financiera.montoMatricula,
-
-    monto_certificacion:
-      financiera.montoCertificacion,
-
-    cantidad_cuotas:
-      financiera.cantidadCuotasFinal,
-
-    monto_cuota:
-      financiera.montoCuotaFinal,
-
-    modalidad:
-      financiera.modalidad
-
-  }
-
-};
+}
 
 async function previsualizarPlanPago(data) {
 
