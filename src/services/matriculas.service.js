@@ -168,32 +168,65 @@ async function listarMatriculas(filtros = {}) {
   }
 
   const query = `
-    SELECT
-      m.id,
-      m.alumno_id,
-      m.plan_curso_id,
-      m.estado_alumno_id,
-      m.fecha_matricula,
-      m.fecha_inicio,
-      m.fecha_fin_estimada,
-      m.cronograma_url,
-      m.notas,
-      m.activo,
-      m.fecha_creacion
+SELECT
+    m.id,
+    m.alumno_id,
+    m.plan_curso_id,
+    m.estado_alumno_id,
+    m.fecha_matricula,
+    m.fecha_inicio,
+    m.fecha_fin_estimada,
+    m.cronograma_url,
+    m.notas,
+    m.activo,
+    m.fecha_creacion,
+    ppa.monto_total
+        AS monto_total,
 
-    FROM matriculas m
+    ppa.monto_matricula
+        AS cuota_inicial,
 
-    INNER JOIN estados_alumno ea
-      ON ea.id = m.estado_alumno_id
+    ppa.monto_certificacion
+        AS costo_certificacion,
 
-    INNER JOIN alumnos a
-      ON a.id = m.alumno_id
+    CASE
+        WHEN COALESCE(
+            ppa.monto_certificacion,
+            0
+        ) > 0
+        THEN true
+        ELSE false
+    END
+        AS certificacion_incluida,
 
-    ${where}
+    ppa.monto_cuota
+        AS monto_cuota,
 
-    ORDER BY
-      m.fecha_matricula DESC,
-      m.id DESC
+    ppa.cantidad_cuotas
+        AS cantidad_cuotas,
+
+    ppa.modalidad_pago
+        AS modalidad_pago,
+
+    ppa.plan_precio_id
+        AS plan_precio_id
+
+FROM matriculas m
+
+INNER JOIN estados_alumno ea
+    ON ea.id = m.estado_alumno_id
+
+INNER JOIN alumnos a
+    ON a.id = m.alumno_id
+
+LEFT JOIN planes_pago_alumno ppa
+    ON ppa.matricula_id = m.id
+
+${where}
+
+ORDER BY
+    m.fecha_matricula DESC,
+    m.id DESC
   `;
 
   const result =
