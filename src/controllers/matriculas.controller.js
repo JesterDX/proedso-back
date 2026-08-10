@@ -58,7 +58,6 @@ function obtenerNombreUsuario(req) {
 // ==========================================================
 // ACTUALIZAR MATRÍCULA
 // ==========================================================
-
 async function actualizar(req, res) {
 
   try {
@@ -91,7 +90,7 @@ async function actualizar(req, res) {
     }
 
     const actualizada =
-      await matriculasService.procesarTodo(
+      await matriculasService.actualizarMatricula(
         id,
         req.body,
         req.user
@@ -112,7 +111,8 @@ async function actualizar(req, res) {
 
     res.status(500).json({
       ok: false,
-      message: 'Error al actualizar matrícula.'
+      message: error.message ||
+        'Error al actualizar matrícula.'
     });
 
   }
