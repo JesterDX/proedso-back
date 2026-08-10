@@ -6891,7 +6891,7 @@ return {
   }
 
 };
-
+  }
 
 async function previsualizarPlanPago(data) {
 
