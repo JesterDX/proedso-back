@@ -673,6 +673,25 @@ async function previsualizarPlanPagoController(
      * Si vienen cuotas_personalizadas,
      * verificamos que tengan la estructura mínima.
      */
+    console.log(
+  '🟡 BODY PREVISUALIZACIÓN:',
+  JSON.stringify(req.body, null, 2)
+);
+
+console.log(
+  '🟡 cuotas_personalizadas:',
+  req.body.cuotas_personalizadas
+);
+
+console.log(
+  '🟡 tipo:',
+  typeof req.body.cuotas_personalizadas
+);
+
+console.log(
+  '🟡 esArray:',
+  Array.isArray(req.body.cuotas_personalizadas)
+);
 
     if (
       req.body.cuotas_personalizadas !== undefined
