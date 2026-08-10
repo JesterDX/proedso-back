@@ -1273,6 +1273,718 @@ async function insertarPlanPagoAlumno(
   return result.rows[0];
 }
 
+async function recalcularPlanFinancieroConPagos(
+  client,
+  {
+    planPagoActual,
+    planPrecio,
+    fechaMatricula,
+    fechaInicio,
+    fechaFinEstimada,
+    modalidadPago,
+    nombresMaquinas = [],
+
+    montoCuotaPersonalizada = null,
+    matriculaPersonalizada = null,
+    certificacionIncluidaPersonalizada = null,
+    costoCertificacionPersonalizado = null
+  }
+) {
+
+  // ========================================================
+  // 1. CALCULAR NUEVA ESTRUCTURA
+  // ========================================================
+
+  const financiera =
+    calcularEstructuraFinanciera(
+      planPrecio,
+      modalidadPago,
+      montoCuotaPersonalizada,
+      matriculaPersonalizada,
+      certificacionIncluidaPersonalizada,
+      costoCertificacionPersonalizado
+    );
+
+
+  // ========================================================
+  // 2. OBTENER CONCEPTOS
+  // ========================================================
+
+  const conceptoMatricula =
+    await obtenerConceptoCobroPorCodigo(
+      client,
+      'MATRICULA'
+    );
+
+  const conceptoCuota =
+    await obtenerConceptoCobroPorCodigo(
+      client,
+      'CUOTA'
+    );
+
+  const conceptoCertificacion =
+    await obtenerConceptoCobroPorCodigo(
+      client,
+      'CERTIFICACION'
+    );
+
+  if (
+    !conceptoMatricula ||
+    !conceptoCuota ||
+    !conceptoCertificacion
+  ) {
+    throw new Error(
+      'Faltan conceptos de cobro base.'
+    );
+  }
+
+
+  // ========================================================
+  // 3. OBTENER TODAS LAS CUOTAS ACTUALES
+  // ========================================================
+
+  const cuotasResult =
+    await client.query(
+      `
+      SELECT
+        c.*
+      FROM cuotas c
+      WHERE c.plan_pago_alumno_id = $1
+      ORDER BY
+        CASE
+          WHEN c.concepto_id = $2 THEN 0
+          WHEN c.concepto_id = $3 THEN 1
+          WHEN c.concepto_id = $4 THEN 2
+          ELSE 3
+        END,
+        c.numero_cuota ASC NULLS LAST,
+        c.id ASC
+      `,
+      [
+        planPagoActual.id,
+        conceptoMatricula.id,
+        conceptoCuota.id,
+        conceptoCertificacion.id
+      ]
+    );
+
+
+  const cuotasActuales =
+    cuotasResult.rows;
+
+
+  // ========================================================
+  // 4. SEPARAR POR CONCEPTO
+  // ========================================================
+
+  const cuotaMatricula =
+    cuotasActuales.find(
+      c =>
+        Number(c.concepto_id) ===
+        Number(conceptoMatricula.id)
+    );
+
+  const cuotaCertificacion =
+    cuotasActuales.find(
+      c =>
+        Number(c.concepto_id) ===
+        Number(conceptoCertificacion.id)
+    );
+
+  const cuotasNormales =
+    cuotasActuales.filter(
+      c =>
+        Number(c.concepto_id) ===
+        Number(conceptoCuota.id)
+    );
+
+
+  // ========================================================
+  // 5. MATRÍCULA
+  //
+  // SI YA TIENE PAGO:
+  //     NO TOCAR.
+  //
+  // SI NO TIENE PAGO:
+  //     ACTUALIZAR AL NUEVO VALOR.
+  // ========================================================
+
+  if (cuotaMatricula) {
+
+    const montoPagado =
+      Number(
+        cuotaMatricula.monto_pagado || 0
+      );
+
+    if (montoPagado <= 0) {
+
+      await client.query(
+        `
+        UPDATE cuotas
+
+        SET
+          monto_programado = $1,
+          saldo_pendiente = $1,
+          fecha_programada = $2,
+          fecha_vencimiento = $2,
+          estado = 'PENDIENTE'
+
+        WHERE id = $3
+        `,
+        [
+          financiera.montoMatricula,
+
+          normalizarFecha(
+            fechaMatricula
+          ),
+
+          cuotaMatricula.id
+        ]
+      );
+
+    } else {
+
+      console.log(
+        `[FINANCIERO] Matrícula protegida. `
+        + `Pagado=${montoPagado}`
+      );
+
+    }
+
+  } else if (
+    financiera.montoMatricula > 0
+  ) {
+
+    await insertarCuota(
+      client,
+      {
+        plan_pago_alumno_id:
+          planPagoActual.id,
+
+        numero_cuota:
+          0,
+
+        concepto_id:
+          conceptoMatricula.id,
+
+        fecha_programada:
+          fechaMatricula,
+
+        fecha_vencimiento:
+          fechaMatricula,
+
+        monto_programado:
+          financiera.montoMatricula,
+
+        observaciones:
+          'Pago de matrícula'
+      }
+    );
+  }
+
+
+  // ========================================================
+  // 6. CERTIFICACIÓN
+  //
+  // SI YA TIENE PAGO:
+  //     NO TOCAR.
+  //
+  // SI NO TIENE PAGO:
+  //     ACTUALIZAR.
+  // ========================================================
+
+  if (cuotaCertificacion) {
+
+    const montoPagado =
+      Number(
+        cuotaCertificacion.monto_pagado || 0
+      );
+
+    if (montoPagado <= 0) {
+
+      if (
+        financiera.montoCertificacion > 0
+      ) {
+
+        const fechaCertificacion =
+          normalizarFecha(
+            fechaFinEstimada
+          ) ||
+          sumarMeses(
+            normalizarFecha(
+              fechaInicio ||
+              fechaMatricula
+            ),
+            financiera.cantidadCuotasBase
+          );
+
+        await client.query(
+          `
+          UPDATE cuotas
+
+          SET
+            monto_programado = $1,
+            saldo_pendiente = $1,
+            fecha_programada = $2,
+            fecha_vencimiento = $2,
+            estado = 'PENDIENTE',
+            observaciones = 'Carpeta y certificación'
+
+          WHERE id = $3
+          `,
+          [
+            financiera.montoCertificacion,
+
+            fechaCertificacion,
+
+            cuotaCertificacion.id
+          ]
+        );
+
+      } else {
+
+        await client.query(
+          `
+          DELETE FROM cuotas
+          WHERE id = $1
+          `,
+          [
+            cuotaCertificacion.id
+          ]
+        );
+
+      }
+
+    } else {
+
+      console.log(
+        `[FINANCIERO] Certificación protegida. `
+        + `Pagado=${montoPagado}`
+      );
+
+    }
+
+  } else if (
+    financiera.montoCertificacion > 0
+  ) {
+
+    const fechaCertificacion =
+      normalizarFecha(
+        fechaFinEstimada
+      ) ||
+      sumarMeses(
+        normalizarFecha(
+          fechaInicio ||
+          fechaMatricula
+        ),
+        financiera.cantidadCuotasBase
+      );
+
+    await insertarCuota(
+      client,
+      {
+        plan_pago_alumno_id:
+          planPagoActual.id,
+
+        numero_cuota:
+          null,
+
+        concepto_id:
+          conceptoCertificacion.id,
+
+        fecha_programada:
+          fechaCertificacion,
+
+        fecha_vencimiento:
+          fechaCertificacion,
+
+        monto_programado:
+          financiera.montoCertificacion,
+
+        observaciones:
+          'Carpeta y certificación'
+      }
+    );
+  }
+
+
+  // ========================================================
+  // 7. SEPARAR CUOTAS PROTEGIDAS
+  //
+  // PROTEGIDA = tiene dinero pagado.
+  // ========================================================
+
+  const cuotasProtegidas =
+    cuotasNormales.filter(
+      cuota =>
+        Number(
+          cuota.monto_pagado || 0
+        ) > 0
+    );
+
+
+  const cuotasModificables =
+    cuotasNormales.filter(
+      cuota =>
+        Number(
+          cuota.monto_pagado || 0
+        ) <= 0
+    );
+
+
+  console.log(
+    '[FINANCIERO] Cuotas protegidas:',
+    cuotasProtegidas.length
+  );
+
+  console.log(
+    '[FINANCIERO] Cuotas modificables:',
+    cuotasModificables.length
+  );
+
+
+  // ========================================================
+  // 8. TOTAL YA PAGADO EN CUOTAS
+  // ========================================================
+
+  const totalPagadoCuotas =
+    cuotasProtegidas.reduce(
+      (
+        total,
+        cuota
+      ) =>
+        total +
+        Number(
+          cuota.monto_pagado || 0
+        ),
+      0
+    );
+
+
+  // ========================================================
+  // 9. TOTAL NUEVO QUE CORRESPONDE A CUOTAS
+  // ========================================================
+
+  const totalNuevoCuotas =
+    Number(
+      (
+        financiera.montoCuotaFinal *
+        financiera.cantidadCuotasFinal
+      ).toFixed(2)
+    );
+
+
+  // ========================================================
+  // 10. SALDO QUE FALTA DESPUÉS DE LO PAGADO
+  // ========================================================
+
+  let saldoNuevoCuotas =
+    Number(
+      (
+        totalNuevoCuotas -
+        totalPagadoCuotas
+      ).toFixed(2)
+    );
+
+
+  if (
+    saldoNuevoCuotas < 0
+  ) {
+    saldoNuevoCuotas = 0;
+  }
+
+
+  console.log(
+    '[FINANCIERO] Nuevo total cuotas:',
+    totalNuevoCuotas
+  );
+
+  console.log(
+    '[FINANCIERO] Total cuotas pagado:',
+    totalPagadoCuotas
+  );
+
+  console.log(
+    '[FINANCIERO] Saldo cuotas:',
+    saldoNuevoCuotas
+  );
+
+
+  // ========================================================
+  // 11. ACTUALIZAR CUOTAS PENDIENTES
+  // ========================================================
+
+  const fechaBase =
+    normalizarFecha(
+      fechaInicio ||
+      fechaMatricula
+    );
+
+  if (!fechaBase) {
+
+    throw new Error(
+      'No existe una fecha base para generar las cuotas.'
+    );
+  }
+
+
+  // ========================================================
+  // CASO A:
+  //
+  // YA EXISTEN CUOTAS PENDIENTES.
+  //
+  // Las reutilizamos.
+  // ========================================================
+
+  let indice =
+    0;
+
+  let saldoRestante =
+    saldoNuevoCuotas;
+
+
+  for (
+    const cuota
+    of cuotasModificables
+  ) {
+
+    if (
+      saldoRestante <= 0
+    ) {
+
+      // Ya no necesitamos
+      // esta cuota.
+      await client.query(
+        `
+        DELETE FROM cuotas
+        WHERE id = $1
+        `,
+        [
+          cuota.id
+        ]
+      );
+
+      continue;
+    }
+
+
+    const montoAsignado =
+      Number(
+        Math.min(
+          financiera.montoCuotaFinal,
+          saldoRestante
+        ).toFixed(2)
+      );
+
+
+    const fechaCuota =
+      generarFechaCuotaIndividual(
+        fechaBase,
+        indice + 1,
+        financiera.modalidad
+      );
+
+
+    await client.query(
+      `
+      UPDATE cuotas
+
+      SET
+        monto_programado = $1,
+        monto_pagado = 0,
+        saldo_pendiente = $1,
+        estado = 'PENDIENTE',
+        fecha_programada = $2,
+        fecha_vencimiento = $2,
+        observaciones = $3
+
+      WHERE id = $4
+      `,
+      [
+        montoAsignado,
+
+        fechaCuota,
+
+        `Cuota ${indice + 1} de ${financiera.cantidadCuotasFinal} - ${financiera.modalidad}`,
+
+        cuota.id
+      ]
+    );
+
+
+    saldoRestante =
+      Number(
+        (
+          saldoRestante -
+          montoAsignado
+        ).toFixed(2)
+      );
+
+
+    indice++;
+  }
+
+
+  // ========================================================
+  // 12. CREAR CUOTAS QUE FALTEN
+  // ========================================================
+
+  while (
+    saldoRestante > 0
+  ) {
+
+    const montoAsignado =
+      Number(
+        Math.min(
+          financiera.montoCuotaFinal,
+          saldoRestante
+        ).toFixed(2)
+      );
+
+
+    const numeroCuota =
+      cuotasProtegidas.length +
+      indice +
+      1;
+
+
+    const fechaCuota =
+      generarFechaCuotaIndividual(
+        fechaBase,
+        indice + 1,
+        financiera.modalidad
+      );
+
+
+    await insertarCuota(
+      client,
+      {
+        plan_pago_alumno_id:
+          planPagoActual.id,
+
+        numero_cuota:
+          numeroCuota,
+
+        concepto_id:
+          conceptoCuota.id,
+
+        fecha_programada:
+          fechaCuota,
+
+        fecha_vencimiento:
+          fechaCuota,
+
+        monto_programado:
+          montoAsignado,
+
+        observaciones:
+          `Cuota ${numeroCuota} de ${financiera.cantidadCuotasFinal} - ${financiera.modalidad}`
+      }
+    );
+
+
+    saldoRestante =
+      Number(
+        (
+          saldoRestante -
+          montoAsignado
+        ).toFixed(2)
+      );
+
+
+    indice++;
+  }
+
+
+  // ========================================================
+  // 13. ACTUALIZAR PLAN DE PAGO
+  // ========================================================
+
+  const notaPago =
+    `${planPrecio.nombre} - Máquinas: ${nombresMaquinas.join(', ')}`;
+
+
+  await client.query(
+    `
+    UPDATE planes_pago_alumno
+
+    SET
+      plan_precio_id = $1,
+      monto_total = $2,
+      monto_matricula = $3,
+      monto_certificacion = $4,
+      cantidad_cuotas = $5,
+      monto_cuota = $6,
+      nota_pago = $7,
+      modalidad_pago = $8
+
+    WHERE id = $9
+    `,
+    [
+      planPrecio.id,
+
+      financiera.montoTotal,
+
+      financiera.montoMatricula,
+
+      financiera.montoCertificacion,
+
+      financiera.cantidadCuotasFinal,
+
+      financiera.montoCuotaFinal,
+
+      notaPago,
+
+      financiera.modalidad,
+
+      planPagoActual.id
+    ]
+  );
+
+
+  console.log(
+    '[FINANCIERO] Plan financiero actualizado correctamente.'
+  );
+}
+
+// ==========================================================
+// GENERAR FECHA DE UNA CUOTA
+// ==========================================================
+
+function generarFechaCuotaIndividual(
+  fechaBase,
+  numero,
+  modalidad
+) {
+
+  const fecha =
+    new Date(
+      `${fechaBase}T00:00:00`
+    );
+
+  if (
+    modalidad === 'QUINCENAL'
+  ) {
+
+    const dias =
+      numero * 15;
+
+    fecha.setDate(
+      fecha.getDate() + dias
+    );
+
+  } else {
+
+    fecha.setMonth(
+      fecha.getMonth() + numero
+    );
+
+  }
+
+  return fecha
+    .toISOString()
+    .split('T')[0];
+}
 // ==========================================================
 // INSERTAR CUOTA
 // ==========================================================
@@ -1336,9 +2048,7 @@ async function insertarCuota(
 // ==========================================================
 // CALCULAR ESTRUCTURA FINANCIERA
 // ==========================================================
-// ==========================================================
-// CALCULAR ESTRUCTURA FINANCIERA
-// ==========================================================
+
 function calcularEstructuraFinanciera(
   planPrecio,
   modalidadPago,
