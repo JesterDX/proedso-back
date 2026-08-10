@@ -1290,7 +1290,8 @@ async function recalcularPlanFinancieroConPagos(
     montoCuotaPersonalizada = null,
     matriculaPersonalizada = null,
     certificacionIncluidaPersonalizada = null,
-    costoCertificacionPersonalizado = null
+    costoCertificacionPersonalizado = null,
+    cuotasPersonalizadas = null
   }
 ) {
 
