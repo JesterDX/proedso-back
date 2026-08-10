@@ -3218,6 +3218,7 @@ async function validarPlanSinPagos(
 // ==========================================================
 // CREAR PLAN FINANCIERO COMPLETO
 // ==========================================================
+
 async function crearPlanFinanciero(
   client,
   {
@@ -3228,13 +3229,17 @@ async function crearPlanFinanciero(
     fechaFinEstimada,
     modalidadPago,
     nombresMaquinas = [],
+
     montoCuotaPersonalizada = null,
-
     matriculaPersonalizada = null,
-
     certificacionIncluidaPersonalizada = null,
+    costoCertificacionPersonalizado = null,
 
-    costoCertificacionPersonalizado = null
+    // ======================================================
+    // NUEVO:
+    // CRONOGRAMA EDITADO Y CONFIRMADO DESDE EL FRONT
+    // ======================================================
+    cronogramaConfirmado = null
   }
 ) {
 
@@ -3273,37 +3278,53 @@ async function crearPlanFinanciero(
   }
 
 
+  // ======================================================
+  // DEBUG
+  // ======================================================
+
+  console.log('');
+  console.log('========================================');
+  console.log('💰 CREAR PLAN FINANCIERO');
+  console.log('========================================');
+
+  console.log(
+    'montoCuotaPersonalizada:',
+    montoCuotaPersonalizada
+  );
+
+  console.log(
+    'matriculaPersonalizada:',
+    matriculaPersonalizada
+  );
+
+  console.log(
+    'certificacionIncluidaPersonalizada:',
+    certificacionIncluidaPersonalizada
+  );
+
+  console.log(
+    'costoCertificacionPersonalizado:',
+    costoCertificacionPersonalizado
+  );
+
+  console.log(
+    'cronogramaConfirmado:',
+    cronogramaConfirmado
+  );
+
+  console.log(
+    'PLAN PRECIO:',
+    planPrecio
+  );
+
+  console.log('========================================');
+
+
+  // ======================================================
+  // ESTRUCTURA FINANCIERA
+  // ======================================================
+
   const financiera =
-    console.log('========================================');
-console.log('💰 CREAR PLAN FINANCIERO');
-console.log('========================================');
-
-console.log(
-  'montoCuotaPersonalizada:',
-  montoCuotaPersonalizada
-);
-
-console.log(
-  'matriculaPersonalizada:',
-  matriculaPersonalizada
-);
-
-console.log(
-  'certificacionIncluidaPersonalizada:',
-  certificacionIncluidaPersonalizada
-);
-
-console.log(
-  'costoCertificacionPersonalizado:',
-  costoCertificacionPersonalizado
-);
-
-console.log(
-  'PLAN PRECIO:',
-  planPrecio
-);
-
-console.log('========================================');
     calcularEstructuraFinanciera(
       planPrecio,
 
@@ -3382,10 +3403,10 @@ console.log('========================================');
 
 
   // ======================================================
-  // GENERAR FECHAS DE CUOTAS
+  // GENERAR CRONOGRAMA AUTOMÁTICO
   // ======================================================
 
-  const cuotasConFechas =
+  let cuotasConFechas =
     generarFechasCuotas(
       fechaBaseCuotas,
       financiera.cuotas,
@@ -3394,7 +3415,157 @@ console.log('========================================');
 
 
   // ======================================================
-  // NOTA
+  // SI EL FRONT CONFIRMÓ UN CRONOGRAMA,
+  // USAR SUS FECHAS COMO OFICIALES
+  // ======================================================
+
+  if (
+    Array.isArray(cronogramaConfirmado) &&
+    cronogramaConfirmado.length > 0
+  ) {
+
+    console.log('');
+    console.log('========================================');
+    console.log('✅ USANDO CRONOGRAMA CONFIRMADO');
+    console.log('========================================');
+
+    console.log(
+      'Cantidad recibida:',
+      cronogramaConfirmado.length
+    );
+
+
+    // ==================================================
+    // CUOTAS MENSUALES
+    // ==================================================
+
+    cuotasConFechas =
+      cuotasConFechas.map(
+        cuota => {
+
+          const confirmada =
+            cronogramaConfirmado.find(
+              item =>
+                Number(item.numero_cuota) ===
+                Number(cuota.numero_cuota)
+            );
+
+          if (!confirmada) {
+            return cuota;
+          }
+
+          const fechaConfirmada =
+            normalizarFecha(
+              confirmada.fecha_vencimiento ||
+              confirmada.fecha_programada
+            );
+
+          if (!fechaConfirmada) {
+            return cuota;
+          }
+
+          return {
+
+            ...cuota,
+
+            fecha_programada:
+              fechaConfirmada,
+
+            fecha_vencimiento:
+              fechaConfirmada
+
+          };
+
+        }
+      );
+
+
+    // ==================================================
+    // MATRÍCULA
+    // ==================================================
+
+    const matriculaConfirmada =
+      cronogramaConfirmado.find(
+        item =>
+          Number(item.numero_cuota) === 0 &&
+          String(item.concepto || '')
+            .toUpperCase()
+            .includes('MATR')
+      );
+
+    if (
+      matriculaConfirmada
+    ) {
+
+      const fechaConfirmada =
+        normalizarFecha(
+          matriculaConfirmada.fecha_vencimiento ||
+          matriculaConfirmada.fecha_programada
+        );
+
+      if (fechaConfirmada) {
+
+        fechaMatricula =
+          fechaConfirmada;
+
+      }
+
+    }
+
+
+    // ==================================================
+    // CERTIFICACIÓN
+    // ==================================================
+
+    const certificacionConfirmada =
+      cronogramaConfirmado.find(
+        item =>
+          (
+            item.numero_cuota === null ||
+            item.numero_cuota === undefined
+          ) &&
+          String(item.concepto || '')
+            .toUpperCase()
+            .includes('CERT')
+      );
+
+    if (
+      certificacionConfirmada
+    ) {
+
+      const fechaConfirmada =
+        normalizarFecha(
+          certificacionConfirmada.fecha_vencimiento ||
+          certificacionConfirmada.fecha_programada
+        );
+
+      if (fechaConfirmada) {
+
+        // La fecha confirmada por la encargada
+        // será la fecha oficial de certificación.
+
+        console.log(
+          '📜 Fecha certificación confirmada:',
+          fechaConfirmada
+        );
+
+      }
+
+    }
+
+
+    console.log(
+      '📋 Cronograma confirmado aplicado.'
+    );
+
+    console.log('========================================');
+    console.log('');
+
+  }
+
+
+  // ======================================================
+  // NOTA DE PAGO
   // ======================================================
 
   const notaPago =
@@ -3409,6 +3580,7 @@ console.log('========================================');
     await insertarPlanPagoAlumno(
       client,
       {
+
         matricula_id:
           matriculaId,
 
@@ -3417,9 +3589,6 @@ console.log('========================================');
 
         // ==================================================
         // TOTAL REAL
-        //
-        // Ejemplo:
-        // 20 + (300 × 8) + 10 = 2430
         // ==================================================
 
         monto_total:
@@ -3458,6 +3627,7 @@ console.log('========================================');
 
         modalidad_pago:
           financiera.modalidad
+
       }
     );
 
@@ -3473,6 +3643,7 @@ console.log('========================================');
     await insertarCuota(
       client,
       {
+
         plan_pago_alumno_id:
           planPagoAlumno.id,
 
@@ -3493,6 +3664,7 @@ console.log('========================================');
 
         observaciones:
           'Pago de matrícula'
+
       }
     );
 
@@ -3511,6 +3683,7 @@ console.log('========================================');
     await insertarCuota(
       client,
       {
+
         plan_pago_alumno_id:
           planPagoAlumno.id,
 
@@ -3531,6 +3704,7 @@ console.log('========================================');
 
         observaciones:
           `Cuota ${cuota.numero_cuota} de ${financiera.cantidadCuotasFinal} - ${financiera.modalidad}`
+
       }
     );
 
@@ -3545,18 +3719,71 @@ console.log('========================================');
     financiera.montoCertificacion > 0
   ) {
 
-    const fechaCertificacion =
-      normalizarFecha(
-        fechaFinEstimada
-      ) ||
-      sumarMeses(
-        fechaBaseCuotas,
-        financiera.cantidadCuotasBase
-      );
+    // ==================================================
+    // BUSCAR FECHA CONFIRMADA EN EL CRONOGRAMA
+    // ==================================================
+
+    const certificacionConfirmada =
+      Array.isArray(cronogramaConfirmado)
+        ? cronogramaConfirmado.find(
+            item =>
+              (
+                item.numero_cuota === null ||
+                item.numero_cuota === undefined
+              ) &&
+              String(item.concepto || '')
+                .toUpperCase()
+                .includes('CERT')
+          )
+        : null;
+
+
+    let fechaCertificacion;
+
+
+    // ==================================================
+    // SI LA ENCARGADA LA EDITÓ, ESA ES LA OFICIAL
+    // ==================================================
+
+    if (
+      certificacionConfirmada
+    ) {
+
+      fechaCertificacion =
+        normalizarFecha(
+          certificacionConfirmada.fecha_vencimiento ||
+          certificacionConfirmada.fecha_programada
+        );
+
+    }
+
+
+    // ==================================================
+    // SI NO FUE EDITADA, USAR FECHA NORMAL
+    // ==================================================
+
+    if (!fechaCertificacion) {
+
+      fechaCertificacion =
+        normalizarFecha(
+          fechaFinEstimada
+        ) ||
+        sumarMeses(
+          fechaBaseCuotas,
+          financiera.cantidadCuotasBase
+        );
+
+    }
+
+
+    // ==================================================
+    // INSERTAR CERTIFICACIÓN OFICIAL
+    // ==================================================
 
     await insertarCuota(
       client,
       {
+
         plan_pago_alumno_id:
           planPagoAlumno.id,
 
@@ -3577,6 +3804,7 @@ console.log('========================================');
 
         observaciones:
           'Carpeta y certificación'
+
       }
     );
 
@@ -3588,16 +3816,13 @@ console.log('========================================');
   // ======================================================
 
   return planPagoAlumno;
+
 }
 
 
 // ==========================================================
 // RECALCULAR PLAN FINANCIERO
-//
-// SOLO si NO existen pagos.
-// Respeta los valores personalizados enviados desde el Front.
 // ==========================================================
-
 async function recalcularPlanFinanciero(
   client,
   {
@@ -3613,26 +3838,71 @@ async function recalcularPlanFinanciero(
     montoCuotaPersonalizada = null,
     matriculaPersonalizada = null,
     certificacionIncluidaPersonalizada = null,
-    costoCertificacionPersonalizado = null
+    costoCertificacionPersonalizado = null,
+
+    // ======================================================
+    // NUEVO:
+    // CRONOGRAMA CONFIRMADO POR EL FRONT
+    // ======================================================
+    cronogramaConfirmado = null
   }
 ) {
 
+  console.log('');
   console.log('========================================');
-  console.log('🔥🔥🔥 RECALCULAR PLAN FINANCIERO 🔥🔥🔥');
-  console.log('🔥 matrícula:', matriculaId);
-  console.log('🔥 monto cuota personalizado:', montoCuotaPersonalizada);
-  console.log('🔥 matrícula personalizada:', matriculaPersonalizada);
-  console.log(
-    '🔥 certificación incluida:',
-    certificacionIncluidaPersonalizada
-  );
-  console.log(
-    '🔥 costo certificación:',
-    costoCertificacionPersonalizado
-  );
-  console.log('🔥 modalidad:', modalidadPago);
+  console.log('🔥 RECALCULAR PLAN FINANCIERO');
   console.log('========================================');
 
+  console.log(
+    '🔥 Matrícula:',
+    matriculaId
+  );
+
+  console.log(
+    '🔥 Monto cuota personalizado:',
+    montoCuotaPersonalizada
+  );
+
+  console.log(
+    '🔥 Matrícula personalizada:',
+    matriculaPersonalizada
+  );
+
+  console.log(
+    '🔥 Certificación incluida:',
+    certificacionIncluidaPersonalizada
+  );
+
+  console.log(
+    '🔥 Costo certificación:',
+    costoCertificacionPersonalizado
+  );
+
+  console.log(
+    '🔥 Modalidad:',
+    modalidadPago
+  );
+
+  console.log(
+    '🔥 Cronograma confirmado:',
+    cronogramaConfirmado
+  );
+
+  if (
+    Array.isArray(
+      cronogramaConfirmado
+    )
+  ) {
+
+    console.log(
+      '🔥 Cantidad elementos cronograma:',
+      cronogramaConfirmado.length
+    );
+
+  }
+
+  console.log('========================================');
+  console.log('');
 
   // ========================================================
   // SI NO EXISTE PLAN DE PAGO
@@ -3644,26 +3914,32 @@ async function recalcularPlanFinanciero(
       client,
       {
         matriculaId,
+
         planPrecio,
+
         fechaMatricula,
+
         fechaInicio,
+
         fechaFinEstimada,
+
         modalidadPago,
+
         nombresMaquinas,
 
-        montoTotalPersonalizado:
-          montoCuotaPersonalizada,
+        montoCuotaPersonalizada,
 
-        cuotaInicialPersonalizada:
-          matriculaPersonalizada,
+        matriculaPersonalizada,
 
         certificacionIncluidaPersonalizada,
 
-        costoCertificacionPersonalizado
+        costoCertificacionPersonalizado,
+
+        // NUEVO
+        cronogramaConfirmado
       }
     );
   }
-
 
   // ========================================================
   // VALIDAR QUE NO EXISTAN PAGOS
@@ -3674,21 +3950,19 @@ async function recalcularPlanFinanciero(
     planPagoActual.id
   );
 
-
   // ========================================================
-  // CALCULAR NUEVA ESTRUCTURA FINANCIERA
-  //
-  // IMPORTANTE:
-  //
-  // montoCuotaPersonalizada
-  //     = monto de cada cuota
-  //
-  // matriculaPersonalizada
-  //     = matrícula inicial
-  //
+  // CALCULAR ESTRUCTURA FINANCIERA
   // ========================================================
 
-  console.log('🔥 VALORES QUE ENTRAN A calcularEstructuraFinanciera:', { montoCuotaPersonalizada, matriculaPersonalizada, certificacionIncluidaPersonalizada, costoCertificacionPersonalizado });
+  console.log(
+    '🔥 VALORES QUE ENTRAN A calcularEstructuraFinanciera:',
+    {
+      montoCuotaPersonalizada,
+      matriculaPersonalizada,
+      certificacionIncluidaPersonalizada,
+      costoCertificacionPersonalizado
+    }
+  );
 
   const financiera =
     calcularEstructuraFinanciera(
@@ -3704,7 +3978,6 @@ async function recalcularPlanFinanciero(
 
       costoCertificacionPersonalizado
     );
-
 
   // ========================================================
   // FECHA BASE
@@ -3723,18 +3996,195 @@ async function recalcularPlanFinanciero(
     );
   }
 
-
   // ========================================================
-  // GENERAR FECHAS
+  // DETERMINAR CRONOGRAMA
+  //
+  // SI EL FRONT MANDÓ UN CRONOGRAMA CONFIRMADO:
+  //
+  //     NO GENERAMOS NUEVAS FECHAS.
+  //
+  // USAMOS EXACTAMENTE LAS FECHAS
+  // QUE CONFIRMÓ LA ENCARGADA.
+  //
+  // SI NO VIENE:
+  //
+  //     SE MANTIENE EL COMPORTAMIENTO ANTERIOR.
   // ========================================================
 
-  const cuotasConFechas =
-    generarFechasCuotas(
-      fechaBaseCuotas,
-      financiera.cuotas,
-      financiera.modalidad
+  let cronogramaFinal = null;
+
+  if (
+    Array.isArray(
+      cronogramaConfirmado
+    ) &&
+    cronogramaConfirmado.length > 0
+  ) {
+
+    console.log(
+      '✅ USANDO CRONOGRAMA CONFIRMADO POR EL FRONT.'
     );
 
+    cronogramaFinal =
+      cronogramaConfirmado.map(
+        item => ({
+          numero_cuota:
+            item.numero_cuota ?? null,
+
+          concepto:
+            item.concepto || null,
+
+          fecha_programada:
+            normalizarFecha(
+              item.fecha_programada ||
+              item.fecha_vencimiento
+            ),
+
+          fecha_vencimiento:
+            normalizarFecha(
+              item.fecha_vencimiento ||
+              item.fecha_programada
+            ),
+
+          monto:
+            Number(
+              item.monto ??
+              item.monto_programado ??
+              0
+            )
+        })
+      );
+
+  } else {
+
+    console.log(
+      '⚠️ NO HAY CRONOGRAMA CONFIRMADO.'
+    );
+
+    console.log(
+      '🔄 Generando cronograma automáticamente.'
+    );
+
+    const cuotasConFechas =
+      generarFechasCuotas(
+        fechaBaseCuotas,
+        financiera.cuotas,
+        financiera.modalidad
+      );
+
+    cronogramaFinal = [];
+
+    // ------------------------------------------------------
+    // MATRÍCULA
+    // ------------------------------------------------------
+
+    if (
+      financiera.montoMatricula > 0
+    ) {
+
+      cronogramaFinal.push({
+
+        numero_cuota:
+          0,
+
+        concepto:
+          'Matrícula',
+
+        fecha_programada:
+          fechaMatricula,
+
+        fecha_vencimiento:
+          fechaMatricula,
+
+        monto:
+          financiera.montoMatricula
+
+      });
+    }
+
+    // ------------------------------------------------------
+    // CUOTAS
+    // ------------------------------------------------------
+
+    for (
+      const cuota
+      of cuotasConFechas
+    ) {
+
+      cronogramaFinal.push({
+
+        numero_cuota:
+          cuota.numero_cuota,
+
+        concepto:
+          'Cuota mensual',
+
+        fecha_programada:
+          cuota.fecha_programada,
+
+        fecha_vencimiento:
+          cuota.fecha_vencimiento,
+
+        monto:
+          Number(
+            cuota.monto
+          )
+
+      });
+    }
+
+    // ------------------------------------------------------
+    // CERTIFICACIÓN
+    // ------------------------------------------------------
+
+    if (
+      financiera.montoCertificacion > 0
+    ) {
+
+      const fechaCertificacion =
+        normalizarFecha(
+          fechaFinEstimada
+        ) ||
+        sumarMeses(
+          fechaBaseCuotas,
+          financiera.cantidadCuotasBase
+        );
+
+      cronogramaFinal.push({
+
+        numero_cuota:
+          null,
+
+        concepto:
+          'Certificación',
+
+        fecha_programada:
+          fechaCertificacion,
+
+        fecha_vencimiento:
+          fechaCertificacion,
+
+        monto:
+          financiera.montoCertificacion
+
+      });
+    }
+  }
+
+  // ========================================================
+  // VALIDAR CRONOGRAMA
+  // ========================================================
+
+  if (
+    !Array.isArray(
+      cronogramaFinal
+    ) ||
+    cronogramaFinal.length === 0
+  ) {
+
+    throw new Error(
+      'El cronograma de pagos está vacío.'
+    );
+  }
 
   // ========================================================
   // NOTA
@@ -3742,7 +4192,6 @@ async function recalcularPlanFinanciero(
 
   const notaPago =
     `${planPrecio.nombre} - Máquinas: ${nombresMaquinas.join(', ')}`;
-
 
   // ========================================================
   // OBTENER CONCEPTOS
@@ -3777,7 +4226,6 @@ async function recalcularPlanFinanciero(
     );
   }
 
-
   // ========================================================
   // BORRAR CUOTAS ANTERIORES
   // ========================================================
@@ -3791,7 +4239,6 @@ async function recalcularPlanFinanciero(
       planPagoActual.id
     ]
   );
-
 
   // ========================================================
   // ACTUALIZAR PLAN DE PAGO
@@ -3817,20 +4264,14 @@ async function recalcularPlanFinanciero(
 
       planPrecio.id,
 
-      // TOTAL REAL:
-      // matrícula + cuotas + certificación
       financiera.montoTotal,
 
-      // MATRÍCULA
       financiera.montoMatricula,
 
-      // CERTIFICACIÓN
       financiera.montoCertificacion,
 
-      // CANTIDAD DE CUOTAS
       financiera.cantidadCuotasFinal,
 
-      // MONTO DE CADA CUOTA
       financiera.montoCuotaFinal,
 
       notaPago,
@@ -3838,54 +4279,124 @@ async function recalcularPlanFinanciero(
       financiera.modalidad,
 
       planPagoActual.id
+
     ]
   );
 
-
   // ========================================================
-  // INSERTAR MATRÍCULA
-  // ========================================================
-
-  if (
-    financiera.montoMatricula > 0
-  ) {
-
-    await insertarCuota(
-      client,
-      {
-        plan_pago_alumno_id:
-          planPagoActual.id,
-
-        numero_cuota:
-          0,
-
-        concepto_id:
-          conceptoMatricula.id,
-
-        fecha_programada:
-          fechaMatricula,
-
-        fecha_vencimiento:
-          fechaMatricula,
-
-        monto_programado:
-          financiera.montoMatricula,
-
-        observaciones:
-          'Pago de matrícula'
-      }
-    );
-  }
-
-
-  // ========================================================
-  // INSERTAR CUOTAS
+  // INSERTAR CRONOGRAMA OFICIAL
   // ========================================================
 
   for (
-    const cuota
-    of cuotasConFechas
+    const item
+    of cronogramaFinal
   ) {
+
+    const concepto =
+      String(
+        item.concepto || ''
+      )
+        .toUpperCase();
+
+    // ------------------------------------------------------
+    // MATRÍCULA
+    // ------------------------------------------------------
+
+    if (
+      item.numero_cuota === 0 ||
+      concepto.includes('MATR')
+    ) {
+
+      if (
+        Number(
+          item.monto
+        ) <= 0
+      ) {
+        continue;
+      }
+
+      await insertarCuota(
+        client,
+        {
+          plan_pago_alumno_id:
+            planPagoActual.id,
+
+          numero_cuota:
+            0,
+
+          concepto_id:
+            conceptoMatricula.id,
+
+          fecha_programada:
+            item.fecha_programada,
+
+          fecha_vencimiento:
+            item.fecha_vencimiento,
+
+          monto_programado:
+            Number(
+              item.monto
+            ),
+
+          observaciones:
+            'Pago de matrícula'
+        }
+      );
+
+      continue;
+    }
+
+    // ------------------------------------------------------
+    // CERTIFICACIÓN
+    // ------------------------------------------------------
+
+    if (
+      item.numero_cuota === null ||
+      concepto.includes('CERT')
+    ) {
+
+      if (
+        Number(
+          item.monto
+        ) <= 0
+      ) {
+        continue;
+      }
+
+      await insertarCuota(
+        client,
+        {
+          plan_pago_alumno_id:
+            planPagoActual.id,
+
+          numero_cuota:
+            null,
+
+          concepto_id:
+            conceptoCertificacion.id,
+
+          fecha_programada:
+            item.fecha_programada,
+
+          fecha_vencimiento:
+            item.fecha_vencimiento,
+
+          monto_programado:
+            Number(
+              item.monto
+            ),
+
+          observaciones:
+            'Carpeta y certificación'
+        }
+      );
+
+      continue;
+    }
+
+    // ------------------------------------------------------
+    // CUOTA NORMAL
+    // ------------------------------------------------------
 
     await insertarCuota(
       client,
@@ -3894,71 +4405,27 @@ async function recalcularPlanFinanciero(
           planPagoActual.id,
 
         numero_cuota:
-          cuota.numero_cuota,
+          item.numero_cuota,
 
         concepto_id:
           conceptoCuota.id,
 
         fecha_programada:
-          cuota.fecha_programada,
+          item.fecha_programada,
 
         fecha_vencimiento:
-          cuota.fecha_vencimiento,
+          item.fecha_vencimiento,
 
         monto_programado:
-          cuota.monto,
+          Number(
+            item.monto
+          ),
 
         observaciones:
-          `Cuota ${cuota.numero_cuota} de ${financiera.cantidadCuotasFinal} - ${financiera.modalidad}`
+          `Cuota ${item.numero_cuota} de ${financiera.cantidadCuotasFinal} - ${financiera.modalidad}`
       }
     );
   }
-
-
-  // ========================================================
-  // INSERTAR CERTIFICACIÓN
-  // ========================================================
-
-  if (
-    financiera.montoCertificacion > 0
-  ) {
-
-    const fechaCertificacion =
-      normalizarFecha(
-        fechaFinEstimada
-      ) ||
-      sumarMeses(
-        fechaBaseCuotas,
-        financiera.cantidadCuotasBase
-      );
-
-    await insertarCuota(
-      client,
-      {
-        plan_pago_alumno_id:
-          planPagoActual.id,
-
-        numero_cuota:
-          null,
-
-        concepto_id:
-          conceptoCertificacion.id,
-
-        fecha_programada:
-          fechaCertificacion,
-
-        fecha_vencimiento:
-          fechaCertificacion,
-
-        monto_programado:
-          financiera.montoCertificacion,
-
-        observaciones:
-          'Carpeta y certificación'
-      }
-    );
-  }
-
 
   // ========================================================
   // DEVOLVER PLAN ACTUALIZADO
@@ -4182,7 +4649,6 @@ async function obtenerNombresMaquinas(
 // ==========================================================
 // CREAR MATRÍCULA
 // ==========================================================
-
 async function crearMatricula(
   data,
   user
@@ -4196,6 +4662,10 @@ async function crearMatricula(
     await client.query(
       'BEGIN'
     );
+
+    // ======================================================
+    // FECHAS
+    // ======================================================
 
     const fechaMatricula =
       normalizarFecha(
@@ -4213,14 +4683,55 @@ async function crearMatricula(
       );
 
     if (!fechaMatricula) {
+
       throw new Error(
         'La fecha de matrícula es obligatoria.'
       );
     }
 
-    // ------------------------------------------------------
+    // ======================================================
+    // CRONOGRAMA CONFIRMADO
+    // ======================================================
+
+    const cronogramaConfirmado =
+      Array.isArray(
+        data.cronograma_confirmado
+      )
+        ? data.cronograma_confirmado
+        : null;
+
+    console.log('');
+    console.log('========================================');
+    console.log('📋 CREAR MATRÍCULA');
+    console.log('========================================');
+
+    console.log(
+      '📅 Fecha matrícula:',
+      fechaMatricula
+    );
+
+    console.log(
+      '📋 Cronograma confirmado:',
+      cronogramaConfirmado
+    );
+
+    if (
+      cronogramaConfirmado
+    ) {
+
+      console.log(
+        '📏 Elementos cronograma:',
+        cronogramaConfirmado.length
+      );
+
+    }
+
+    console.log('========================================');
+    console.log('');
+
+    // ======================================================
     // CREAR MATRÍCULA
-    // ------------------------------------------------------
+    // ======================================================
 
     const matriculaResult =
       await client.query(
@@ -4269,9 +4780,9 @@ async function crearMatricula(
     const matriculaId =
       nuevaMatricula.id;
 
-    // ------------------------------------------------------
+    // ======================================================
     // HISTORIAL
-    // ------------------------------------------------------
+    // ======================================================
 
     await registrarHistorial(
       client,
@@ -4288,9 +4799,9 @@ async function crearMatricula(
       user
     );
 
-    // ------------------------------------------------------
+    // ======================================================
     // PLAN
-    // ------------------------------------------------------
+    // ======================================================
 
     const plan =
       await obtenerPlanCursoDetalle(
@@ -4299,14 +4810,15 @@ async function crearMatricula(
       );
 
     if (!plan) {
+
       throw new Error(
         'No se encontró el plan de curso.'
       );
     }
 
-    // ------------------------------------------------------
+    // ======================================================
     // MÁQUINAS
-    // ------------------------------------------------------
+    // ======================================================
 
     const maquinasAGuardar =
       await determinarMaquinas(
@@ -4315,9 +4827,9 @@ async function crearMatricula(
         data.maquinas_seleccionadas
       );
 
-    // ------------------------------------------------------
+    // ======================================================
     // INSERTAR MÁQUINAS
-    // ------------------------------------------------------
+    // ======================================================
 
     const nombresMaquinas = [];
 
@@ -4389,18 +4901,18 @@ async function crearMatricula(
       );
     }
 
-    // ------------------------------------------------------
+    // ======================================================
     // PRÁCTICAS
-    // ------------------------------------------------------
+    // ======================================================
 
     await crearAsignacionPracticas(
       matriculaId,
       client
     );
 
-    // ------------------------------------------------------
+    // ======================================================
     // PRECIO
-    // ------------------------------------------------------
+    // ======================================================
 
     const planPrecio =
       await obtenerPlanPrecioVigente(
@@ -4418,46 +4930,56 @@ async function crearMatricula(
       );
     }
 
-    // ------------------------------------------------------
+    // ======================================================
     // PLAN FINANCIERO
-    // ------------------------------------------------------
+    // ======================================================
 
-await crearPlanFinanciero(
-  client,
-  {
-    matriculaId,
+    await crearPlanFinanciero(
+      client,
+      {
+        matriculaId,
 
-    planPrecio,
+        planPrecio,
 
-    fechaMatricula,
+        fechaMatricula,
 
-    fechaInicio,
+        fechaInicio,
 
-    fechaFinEstimada,
+        fechaFinEstimada,
 
-    modalidadPago:
-      data.modalidad_pago ||
-      'MENSUAL',
+        modalidadPago:
+          data.modalidad_pago ||
+          'MENSUAL',
 
-    nombresMaquinas,
+        nombresMaquinas,
 
-    // S/ 300 = cuota mensual
-    montoCuotaPersonalizada:
-      data.monto_total,
+        // S/ 300 = cuota mensual
+        montoCuotaPersonalizada:
+          data.monto_total,
 
-    // S/ 20 = matrícula
-    matriculaPersonalizada:
-      data.cuota_inicial,
+        // S/ 20 = matrícula
+        matriculaPersonalizada:
+          data.cuota_inicial,
 
-    // true
-    certificacionIncluidaPersonalizada:
-      data.certificacion_incluida,
+        // true
+        certificacionIncluidaPersonalizada:
+          data.certificacion_incluida,
 
-    // S/ 10
-    costoCertificacionPersonalizado:
-      data.costo_certificacion
-  }
-);
+        // S/ 10
+        costoCertificacionPersonalizado:
+          data.costo_certificacion,
+
+        // ==================================================
+        // CRONOGRAMA CONFIRMADO POR EL FRONT
+        // ==================================================
+
+        cronogramaConfirmado
+      }
+    );
+
+    // ======================================================
+    // COMMIT
+    // ======================================================
 
     await client.query(
       'COMMIT'
@@ -4478,6 +5000,7 @@ await crearPlanFinanciero(
     client.release();
   }
 }
+
 
 
 // ==========================================================
@@ -5165,30 +5688,32 @@ async function procesarTodo(
       // ----------------------------------------------------
 
       if (planPagoActual) {
-
+        
         await recalcularPlanFinanciero(
           client,
           {
-            matriculaId:
-              id,
-
+            matriculaId: id,
+        
             planPagoActual,
-
+        
             planPrecio,
-
+        
             fechaMatricula,
-
+        
             fechaInicio,
-
+        
             fechaFinEstimada,
-
+        
             modalidadPago:
               modalidadNueva,
-
-            nombresMaquinas
+        
+            nombresMaquinas,
+        
+            // NUEVO
+            cronogramaConfirmado:
+              data.cronograma_confirmado
           }
         );
-
       } else {
 
         await crearPlanFinanciero(
