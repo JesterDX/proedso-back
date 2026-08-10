@@ -2140,16 +2140,29 @@ async function recalcularPlanFinanciero(
     modalidadPago,
     nombresMaquinas = [],
 
-    // ======================================================
-    // VALORES PERSONALIZADOS DEL FRONT
-    // ======================================================
-
     montoCuotaPersonalizada = null,
     matriculaPersonalizada = null,
     certificacionIncluidaPersonalizada = null,
     costoCertificacionPersonalizado = null
   }
 ) {
+
+  console.log('========================================');
+  console.log('🔥🔥🔥 RECALCULAR PLAN FINANCIERO 🔥🔥🔥');
+  console.log('🔥 matrícula:', matriculaId);
+  console.log('🔥 monto cuota personalizado:', montoCuotaPersonalizada);
+  console.log('🔥 matrícula personalizada:', matriculaPersonalizada);
+  console.log(
+    '🔥 certificación incluida:',
+    certificacionIncluidaPersonalizada
+  );
+  console.log(
+    '🔥 costo certificación:',
+    costoCertificacionPersonalizado
+  );
+  console.log('🔥 modalidad:', modalidadPago);
+  console.log('========================================');
+
 
   // ========================================================
   // SI NO EXISTE PLAN DE PAGO
@@ -2204,6 +2217,8 @@ async function recalcularPlanFinanciero(
   //     = matrícula inicial
   //
   // ========================================================
+
+  console.log('🔥 VALORES QUE ENTRAN A calcularEstructuraFinanciera:', { montoCuotaPersonalizada, matriculaPersonalizada, certificacionIncluidaPersonalizada, costoCertificacionPersonalizado });
 
   const financiera =
     calcularEstructuraFinanciera(
