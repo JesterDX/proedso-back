@@ -1731,7 +1731,6 @@ async function validarPlanSinPagos(
 // ==========================================================
 // CREAR PLAN FINANCIERO COMPLETO
 // ==========================================================
-
 async function crearPlanFinanciero(
   client,
   {
@@ -1743,12 +1742,23 @@ async function crearPlanFinanciero(
     modalidadPago,
     nombresMaquinas = [],
 
+    // ======================================================
+    // IMPORTANTE
+    //
+    // montoTotalPersonalizado viene del campo
+    // "monto_total" del frontend, pero en realidad
+    // representa EL MONTO DE CADA CUOTA.
+    // ======================================================
+
     montoTotalPersonalizado = null,
+
     cuotaInicialPersonalizada = null,
+
     certificacionIncluidaPersonalizada = null,
+
     costoCertificacionPersonalizado = null
   }
-){
+) {
 
   const conceptoMatricula =
     await obtenerConceptoCobroPorCodigo(
@@ -1777,17 +1787,40 @@ async function crearPlanFinanciero(
     throw new Error(
       'Faltan conceptos de cobro base.'
     );
+
   }
+
+
+  // ======================================================
+  // CALCULAR ESTRUCTURA FINANCIERA
+  //
+  // montoTotalPersonalizado realmente significa:
+  // MONTO DE CADA CUOTA
+  // ======================================================
 
   const financiera =
     calcularEstructuraFinanciera(
       planPrecio,
+
       modalidadPago,
+
+      // MONTO DE CADA CUOTA
       montoTotalPersonalizado,
+
+      // MATRÍCULA
       cuotaInicialPersonalizada,
+
+      // CERTIFICACIÓN
       certificacionIncluidaPersonalizada,
+
+      // COSTO CERTIFICACIÓN
       costoCertificacionPersonalizado
     );
+
+
+  // ======================================================
+  // FECHA BASE
+  // ======================================================
 
   const fechaBaseCuotas =
     normalizarFecha(
@@ -1796,10 +1829,17 @@ async function crearPlanFinanciero(
     );
 
   if (!fechaBaseCuotas) {
+
     throw new Error(
       'No existe una fecha base para generar las cuotas.'
     );
+
   }
+
+
+  // ======================================================
+  // GENERAR FECHAS
+  // ======================================================
 
   const cuotasConFechas =
     generarFechasCuotas(
@@ -1808,8 +1848,18 @@ async function crearPlanFinanciero(
       financiera.modalidad
     );
 
+
+  // ======================================================
+  // NOTA
+  // ======================================================
+
   const notaPago =
     `${planPrecio.nombre} - Máquinas: ${nombresMaquinas.join(', ')}`;
+
+
+  // ======================================================
+  // INSERTAR PLAN DE PAGO
+  // ======================================================
 
   const planPagoAlumno =
     await insertarPlanPagoAlumno(
@@ -1821,6 +1871,8 @@ async function crearPlanFinanciero(
         plan_precio_id:
           planPrecio.id,
 
+        // ESTE SÍ ES EL TOTAL REAL
+        // matrícula + cuotas + certificación
         monto_total:
           financiera.montoTotal,
 
@@ -1833,6 +1885,7 @@ async function crearPlanFinanciero(
         cantidad_cuotas:
           financiera.cantidadCuotasFinal,
 
+        // MONTO DE CADA CUOTA
         monto_cuota:
           financiera.montoCuotaFinal,
 
@@ -1844,9 +1897,10 @@ async function crearPlanFinanciero(
       }
     );
 
-  // --------------------------------------------------------
+
+  // ======================================================
   // MATRÍCULA
-  // --------------------------------------------------------
+  // ======================================================
 
   if (
     financiera.montoMatricula > 0
@@ -1877,11 +1931,13 @@ async function crearPlanFinanciero(
           'Pago de matrícula'
       }
     );
+
   }
 
-  // --------------------------------------------------------
+
+  // ======================================================
   // CUOTAS
-  // --------------------------------------------------------
+  // ======================================================
 
   for (
     const cuota
@@ -1913,11 +1969,13 @@ async function crearPlanFinanciero(
           `Cuota ${cuota.numero_cuota} de ${financiera.cantidadCuotasFinal} - ${financiera.modalidad}`
       }
     );
+
   }
 
-  // --------------------------------------------------------
+
+  // ======================================================
   // CERTIFICACIÓN
-  // --------------------------------------------------------
+  // ======================================================
 
   if (
     financiera.montoCertificacion > 0
@@ -1957,10 +2015,13 @@ async function crearPlanFinanciero(
           'Carpeta y certificación'
       }
     );
+
   }
+
 
   return planPagoAlumno;
 }
+
 
 // ==========================================================
 // RECALCULAR PLAN FINANCIERO
