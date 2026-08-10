@@ -3058,6 +3058,7 @@ function calcularEstructuraFinanciera(
     modalidad
   };
 }
+
 // ==========================================================
 // GENERAR FECHAS DE CUOTAS
 //
@@ -3124,6 +3125,7 @@ function generarFechasCuotas(
     }
   );
 }
+
 
 // ==========================================================
 // OBTENER PLAN DE PAGO ACTUAL
@@ -6597,141 +6599,298 @@ async function calcularPrevisualizacionPlanPago(
         data.certificacion_incluida,
         data.costo_certificacion
       );
+ 
+// ------------------------------------------------------
+// 7. GENERAR FECHAS DE CUOTAS
+// ------------------------------------------------------
 
-    // ------------------------------------------------------
-    // 7. GENERAR FECHAS DE CUOTAS
-    // ------------------------------------------------------
+const fechaBaseCuotas =
+  normalizarFecha(
+    fechaInicio ||
+    fechaMatricula
+  );
 
-    const fechaBaseCuotas =
-      normalizarFecha(
-        fechaInicio ||
-        fechaMatricula
-      );
+if (!fechaBaseCuotas) {
 
-    if (!fechaBaseCuotas) {
-      throw new Error(
-        'No existe una fecha base para generar las cuotas.'
-      );
-    }
+  throw new Error(
+    'No existe una fecha base para generar las cuotas.'
+  );
 
-    const cuotasConFechas =
-      generarFechasCuotas(
-        fechaBaseCuotas,
-        financiera.cuotas,
-        financiera.modalidad
-      );
+}
 
-    // ------------------------------------------------------
-    // 8. FECHA DE CERTIFICACIÓN
-    // ------------------------------------------------------
+const cuotasConFechas =
+  generarFechasCuotas(
+    fechaBaseCuotas,
+    financiera.cuotas,
+    financiera.modalidad
+  );
 
-    let fechaCertificacion = null;
+
+// ------------------------------------------------------
+// 8. FECHA DE CERTIFICACIÓN
+// ------------------------------------------------------
+
+let fechaCertificacion = null;
+
+if (
+  Number(
+    financiera.montoCertificacion || 0
+  ) > 0
+) {
+
+  // Si existe una fecha fin explícita,
+  // se respeta esa fecha.
+  //
+  // Si no existe, la certificación se coloca
+  // después de la última cuota usando el mismo
+  // intervalo del cronograma.
+
+  fechaCertificacion =
+    normalizarFecha(
+      fechaFinEstimada
+    );
+
+  if (!fechaCertificacion) {
+
+    const ultimaCuota =
+      cuotasConFechas[
+        cuotasConFechas.length - 1
+      ];
 
     if (
-      financiera.montoCertificacion > 0
+      !ultimaCuota ||
+      !ultimaCuota.fecha_vencimiento
     ) {
 
-      fechaCertificacion =
-        normalizarFecha(
-          fechaFinEstimada
-        ) ||
-        sumarMeses(
-          fechaBaseCuotas,
-          financiera.cantidadCuotasBase
-        );
+      throw new Error(
+        'No se pudo determinar la fecha de certificación.'
+      );
+
     }
 
-    // ------------------------------------------------------
-    // 9. DEVOLVER PREVISUALIZACIÓN
-    // ------------------------------------------------------
+    const diasEntreCuotas =
+      String(
+        financiera.modalidad || 'MENSUAL'
+      ).toUpperCase() === 'QUINCENAL'
+        ? 14
+        : 20;
 
-    return {
-
-      plan: {
-        id:
-          plan.id,
-
-        codigo:
-          plan.codigo,
-
-        nombre:
-          plan.nombre,
-
-        tipo_curso_codigo:
-          plan.tipo_curso_codigo,
-
-        tipo_curso_nombre:
-          plan.tipo_curso_nombre,
-
-        cantidad_maquinas:
-          Number(
-            plan.cantidad_maquinas
-          )
-      },
-
-      precio: {
-        id:
-          planPrecio.id,
-
-        nombre:
-          planPrecio.nombre,
-
-        monto_total:
-          financiera.montoTotal,
-
-        matricula:
-          financiera.montoMatricula,
-
-        certificacion:
-          financiera.montoCertificacion,
-
-        cantidad_cuotas:
-          financiera.cantidadCuotasFinal,
-
-        monto_cuota:
-          financiera.montoCuotaFinal
-      },
-
-      modalidad_pago:
-        financiera.modalidad,
-
-      maquinas:
-        maquinasDetalle,
-
-      cuotas:
-        cuotasConFechas,
-
-      fecha_certificacion:
-        fechaCertificacion,
-
-      resumen: {
-        monto_total:
-          financiera.montoTotal,
-
-        monto_matricula:
-          financiera.montoMatricula,
-
-        monto_certificacion:
-          financiera.montoCertificacion,
-
-        cantidad_cuotas:
-          financiera.cantidadCuotasFinal,
-
-        monto_cuota:
-          financiera.montoCuotaFinal,
-
-        modalidad:
-          financiera.modalidad
-      }
-
-    };
-
-  } finally {
-
-    client.release();
+    fechaCertificacion =
+      sumarDias(
+        ultimaCuota.fecha_vencimiento,
+        diasEntreCuotas
+      );
 
   }
+
 }
+
+
+// ------------------------------------------------------
+// 9. CRONOGRAMA COMPLETO
+//
+// ESTE ES EL CRONOGRAMA QUE EL FRONTEND DEBE MOSTRAR
+// Y QUE POSTERIORMENTE DEBE ENVIAR AL GUARDAR.
+//
+// Matrícula
+// Cuotas
+// Certificación
+// ------------------------------------------------------
+
+const cronograma = [
+
+  // ----------------------------------------------------
+  // MATRÍCULA
+  // ----------------------------------------------------
+
+  {
+    tipo:
+      'MATRICULA',
+
+    numero_cuota:
+      0,
+
+    concepto:
+      'Matrícula',
+
+    monto:
+      Number(
+        financiera.montoMatricula || 0
+      ),
+
+    fecha_programada:
+      fechaMatricula,
+
+    fecha_vencimiento:
+      fechaMatricula
+  },
+
+
+  // ----------------------------------------------------
+  // CUOTAS
+  // ----------------------------------------------------
+
+  ...cuotasConFechas.map(
+    cuota => ({
+
+      tipo:
+        'CUOTA',
+
+      numero_cuota:
+        Number(
+          cuota.numero_cuota
+        ),
+
+      concepto:
+        'Cuota mensual',
+
+      monto:
+        Number(
+          cuota.monto || 0
+        ),
+
+      fecha_programada:
+        cuota.fecha_programada,
+
+      fecha_vencimiento:
+        cuota.fecha_vencimiento
+
+    })
+  ),
+
+
+  // ----------------------------------------------------
+  // CERTIFICACIÓN
+  // ----------------------------------------------------
+
+  ...(Number(
+    financiera.montoCertificacion || 0
+  ) > 0
+    ? [
+
+        {
+          tipo:
+            'CERTIFICACION',
+
+          numero_cuota:
+            null,
+
+          concepto:
+            'Certificación',
+
+          monto:
+            Number(
+              financiera.montoCertificacion
+            ),
+
+          fecha_programada:
+            fechaCertificacion,
+
+          fecha_vencimiento:
+            fechaCertificacion
+
+        }
+
+      ]
+
+    : [])
+
+];
+
+
+// ------------------------------------------------------
+// 10. DEVOLVER PREVISUALIZACIÓN
+// ------------------------------------------------------
+
+return {
+
+  plan: {
+
+    id:
+      plan.id,
+
+    codigo:
+      plan.codigo,
+
+    nombre:
+      plan.nombre,
+
+    tipo_curso_codigo:
+      plan.tipo_curso_codigo,
+
+    tipo_curso_nombre:
+      plan.tipo_curso_nombre,
+
+    cantidad_maquinas:
+      Number(
+        plan.cantidad_maquinas
+      )
+
+  },
+
+  precio: {
+
+    id:
+      planPrecio.id,
+
+    nombre:
+      planPrecio.nombre,
+
+    monto_total:
+      financiera.montoTotal,
+
+    matricula:
+      financiera.montoMatricula,
+
+    certificacion:
+      financiera.montoCertificacion,
+
+    cantidad_cuotas:
+      financiera.cantidadCuotasFinal,
+
+    monto_cuota:
+      financiera.montoCuotaFinal
+
+  },
+
+  modalidad_pago:
+    financiera.modalidad,
+
+  maquinas:
+    maquinasDetalle,
+
+  cuotas:
+    cuotasConFechas,
+
+  cronograma:
+    cronograma,
+
+  fecha_certificacion:
+    fechaCertificacion,
+
+  resumen: {
+
+    monto_total:
+      financiera.montoTotal,
+
+    monto_matricula:
+      financiera.montoMatricula,
+
+    monto_certificacion:
+      financiera.montoCertificacion,
+
+    cantidad_cuotas:
+      financiera.cantidadCuotasFinal,
+
+    monto_cuota:
+      financiera.montoCuotaFinal,
+
+    modalidad:
+      financiera.modalidad
+
+  }
+
+};
 
 
 async function previsualizarPlanPago(data) {
