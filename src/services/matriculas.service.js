@@ -180,7 +180,12 @@ SELECT
     m.notas,
     m.activo,
     m.fecha_creacion,
-    ppa.monto_total
+
+    -- =====================================================
+    -- DATOS FINANCIEROS PARA EL FRONT
+    -- =====================================================
+
+    ppa.monto_cuota
         AS monto_total,
 
     ppa.monto_matricula
@@ -198,9 +203,6 @@ SELECT
         ELSE false
     END
         AS certificacion_incluida,
-
-    ppa.monto_cuota
-        AS monto_cuota,
 
     ppa.cantidad_cuotas
         AS cantidad_cuotas,
