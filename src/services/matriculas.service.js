@@ -1940,7 +1940,14 @@ async function recalcularPlanFinancieroConPagos(
 }
 
 // ==========================================================
-// GENERAR FECHA DE UNA CUOTA
+// GENERAR FECHA DE CUOTA
+//
+// REGLAS DEL SISTEMA:
+//
+// MENSUAL   = 4 semanas = 28 días
+// QUINCENAL = 14 días
+//
+// La cuota #1 SIEMPRE parte después de la matrícula.
 // ==========================================================
 
 function generarFechaCuotaIndividual(
@@ -1949,24 +1956,28 @@ function generarFechaCuotaIndividual(
   modalidad
 ) {
 
-  const fecha =
-    new Date(
-      `${fechaBase}T00:00:00`
+  const fecha = new Date(
+    `${fechaBase}T00:00:00`
+  );
+
+  if (Number.isNaN(fecha.getTime())) {
+    throw new Error(
+      'Fecha base inválida para generar cuota.'
     );
+  }
 
   const modalidadNormalizada =
     String(
       modalidad || 'MENSUAL'
-    ).toUpperCase();
+    ).trim().toUpperCase();
 
   const diasEntreCuotas =
     modalidadNormalizada === 'QUINCENAL'
-      ? 15
-      : 20;
+      ? 14
+      : 28;
 
   const dias =
-    (numero - 1) *
-    diasEntreCuotas;
+    Number(numero) * diasEntreCuotas;
 
   fecha.setDate(
     fecha.getDate() + dias
@@ -1976,6 +1987,7 @@ function generarFechaCuotaIndividual(
     .toISOString()
     .split('T')[0];
 }
+
 // ==========================================================
 // INSERTAR CUOTA
 // ==========================================================
