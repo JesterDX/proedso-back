@@ -375,6 +375,7 @@ async function actualizarEstadoMatricula(
 // ==========================================================
 // ACTUALIZAR MATRÍCULA SIMPLE
 // ==========================================================
+
 async function actualizarMatricula(
   id,
   data,
@@ -475,16 +476,15 @@ async function actualizarMatricula(
     // =====================================================
 
     const vieneFinanciero =
-      data.monto_total !== undefined ||
+      data.monto_cuota !== undefined ||
       data.cuota_inicial !== undefined ||
       data.certificacion_incluida !== undefined ||
       data.costo_certificacion !== undefined ||
-      data.monto_cuota !== undefined ||
       data.modalidad_pago !== undefined;
 
 
     // =====================================================
-    // 5. ACTUALIZAR PLAN FINANCIERO
+    // 5. RECALCULAR PLAN FINANCIERO
     // =====================================================
 
     if (
@@ -492,10 +492,87 @@ async function actualizarMatricula(
       planPagoActual
     ) {
 
-      // Aquí NO usamos directamente los valores
-      // enviados por Angular.
+      // ---------------------------------------------------
+      // 5.1 OBTENER MÁQUINAS ACTUALES
+      // ---------------------------------------------------
+
+      const maquinasResult =
+        await client.query(
+          `
+          SELECT
+            mm.maquina_id,
+            mm.es_regalo
+          FROM matricula_maquinas mm
+          WHERE mm.matricula_id = $1
+          ORDER BY mm.orden ASC
+          `,
+          [id]
+        );
+
+      const maquinasActuales =
+        maquinasResult.rows;
+
+
+      // ---------------------------------------------------
+      // 5.2 OBTENER TIPO DE CURSO
+      // ---------------------------------------------------
+
+      const tipoCursoResult =
+        await client.query(
+          `
+          SELECT
+            tc.codigo
+          FROM planes_curso pc
+          INNER JOIN tipos_curso tc
+            ON tc.id = pc.tipo_curso_id
+          WHERE pc.id = $1
+          LIMIT 1
+          `,
+          [
+            data.plan_curso_id
+          ]
+        );
+
+      const tipoCursoCodigo =
+        tipoCursoResult.rows[0]?.codigo || '';
+
+
+      // ---------------------------------------------------
+      // 5.3 OBTENER PRECIO VIGENTE
+      // ---------------------------------------------------
+
+      const planPrecio =
+        await obtenerPlanPrecioVigente(
+          client,
+
+          data.plan_curso_id,
+
+          data.fecha_matricula,
+
+          maquinasActuales,
+
+          tipoCursoCodigo
+        );
+
+
+      if (!planPrecio) {
+
+        throw new Error(
+          'No se encontró un precio vigente para el plan seleccionado.'
+        );
+
+      }
+
+
+      // ---------------------------------------------------
+      // 5.4 VALORES PERSONALIZADOS
       //
-      // Si alguno no viene, conservamos el anterior.
+      // SI VIENE UN VALOR:
+      //     usamos el nuevo.
+      //
+      // SI NO VIENE:
+      //     usamos el valor que ya estaba guardado.
+      // ---------------------------------------------------
 
       const montoCuota =
         data.monto_cuota !== undefined &&
@@ -540,16 +617,81 @@ async function actualizarMatricula(
           : planPagoActual.monto_certificacion;
 
 
-      // ===================================================
-      // AQUÍ FALTA OBTENER EL PLAN PRECIO VIGENTE
-      // Y LAS MÁQUINAS ACTUALES
-      // ===================================================
+      // ---------------------------------------------------
+      // 5.5 NOMBRES DE LAS MÁQUINAS
+      // ---------------------------------------------------
 
-      // Luego:
-      //
-      // recalcularPlanFinanciero(...)
-      //
-      // pasando estos valores efectivos.
+      const nombresMaquinasResult =
+        await client.query(
+          `
+          SELECT
+            ma.nombre
+          FROM matricula_maquinas mm
+
+          INNER JOIN maquinas ma
+            ON ma.id = mm.maquina_id
+
+          WHERE mm.matricula_id = $1
+
+          ORDER BY mm.orden ASC
+          `,
+          [id]
+        );
+
+
+      const nombresMaquinas =
+        nombresMaquinasResult.rows
+          .map(
+            fila => fila.nombre
+          )
+          .filter(Boolean);
+
+
+      // ---------------------------------------------------
+      // 5.6 RECALCULAR
+      // ---------------------------------------------------
+
+      await recalcularPlanFinanciero(
+        client,
+        {
+
+          matriculaId:
+            id,
+
+          planPagoActual,
+
+          planPrecio,
+
+          fechaMatricula:
+            data.fecha_matricula,
+
+          fechaInicio:
+            data.fecha_inicio,
+
+          fechaFinEstimada:
+            data.fecha_fin_estimada,
+
+          modalidadPago,
+
+          nombresMaquinas,
+
+          // =============================================
+          // VALORES PERSONALIZADOS EFECTIVOS
+          // =============================================
+
+          montoCuotaPersonalizada:
+            montoCuota,
+
+          matriculaPersonalizada:
+            montoMatricula,
+
+          certificacionIncluidaPersonalizada:
+            certificacionIncluida,
+
+          costoCertificacionPersonalizado:
+            costoCertificacion
+        }
+      );
     }
 
 
@@ -563,15 +705,27 @@ async function actualizarMatricula(
         matricula_id: id,
         accion: 'ACTUALIZACION',
         descripcion:
-          'Se actualizaron los datos básicos de la matrícula.'
+          'Se actualizaron los datos de la matrícula y su información financiera.'
       },
       user
     );
 
 
-    await client.query('COMMIT');
+    // =====================================================
+    // 7. COMMIT
+    // =====================================================
+
+    await client.query(
+      'COMMIT'
+    );
+
+
+    // =====================================================
+    // 8. DEVOLVER MATRÍCULA
+    // =====================================================
 
     return result.rows[0] || null;
+
 
   } catch (error) {
 
@@ -587,6 +741,7 @@ async function actualizarMatricula(
 
   }
 }
+
 // ==========================================================
 // OBTENER DETALLE DE MATRÍCULA
 // ==========================================================
