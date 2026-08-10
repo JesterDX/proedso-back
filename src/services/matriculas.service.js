@@ -561,6 +561,7 @@ const vieneFinanciero =
         throw new Error(
           'No se encontró un precio vigente para el plan seleccionado.'
         );
+      }
 
 
 // ---------------------------------------------------
@@ -742,6 +743,7 @@ const costoCertificacion =
     client.release();
 
   }
+
 }
 
 // ==========================================================
