@@ -1742,25 +1742,6 @@ async function crearPlanFinanciero(
     fechaFinEstimada,
     modalidadPago,
     nombresMaquinas = [],
-
-    // ======================================================
-    // VALORES PERSONALIZADOS DEL FRONT
-    //
-    // IMPORTANTE:
-    //
-    // montoCuotaPersonalizada
-    //     = monto de CADA cuota mensual
-    //
-    // matriculaPersonalizada
-    //     = costo de matrícula
-    //
-    // certificacionIncluidaPersonalizada
-    //     = si se cobra certificación
-    //
-    // costoCertificacionPersonalizado
-    //     = costo de certificación
-    // ======================================================
-
     montoCuotaPersonalizada = null,
 
     matriculaPersonalizada = null,
@@ -1806,17 +1787,37 @@ async function crearPlanFinanciero(
   }
 
 
-  // ======================================================
-  // CALCULAR ESTRUCTURA FINANCIERA
-  //
-  // AQUÍ:
-  //
-  // montoCuotaPersonalizada = S/ 300
-  // matriculaPersonalizada  = S/ 20
-  // certificación           = S/ 10
-  // ======================================================
-
   const financiera =
+    console.log('========================================');
+console.log('💰 CREAR PLAN FINANCIERO');
+console.log('========================================');
+
+console.log(
+  'montoCuotaPersonalizada:',
+  montoCuotaPersonalizada
+);
+
+console.log(
+  'matriculaPersonalizada:',
+  matriculaPersonalizada
+);
+
+console.log(
+  'certificacionIncluidaPersonalizada:',
+  certificacionIncluidaPersonalizada
+);
+
+console.log(
+  'costoCertificacionPersonalizado:',
+  costoCertificacionPersonalizado
+);
+
+console.log(
+  'PLAN PRECIO:',
+  planPrecio
+);
+
+console.log('========================================');
     calcularEstructuraFinanciera(
       planPrecio,
 
