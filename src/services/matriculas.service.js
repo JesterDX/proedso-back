@@ -666,7 +666,6 @@ console.log(
 );
 
 console.log('========================================');
-
 await recalcularPlanFinanciero(
   client,
   {
@@ -702,14 +701,10 @@ await recalcularPlanFinanciero(
     costoCertificacionPersonalizado:
       costoCertificacion,
 
-    // =================================================
-    // CRONOGRAMA CONFIRMADO POR EL FRONT
-    // =================================================
     cronogramaConfirmado:
-      data.cuotas_personalizadas || null
+      data.cronograma_confirmado || null
   }
 );
-
 }
 
     // =====================================================
