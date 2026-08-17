@@ -4101,10 +4101,62 @@ async function recalcularPlanFinanciero(
   // VALIDAR QUE NO EXISTAN PAGOS
   // ========================================================
 
-  await validarPlanSinPagos(
+// ========================================================
+// VALIDAR PAGOS EXISTENTES
+// ========================================================
+
+const resumenCuotas =
+  await obtenerResumenCuotasPlan(
     client,
     planPagoActual.id
   );
+
+console.log('');
+console.log('========================================');
+console.log('💳 RESUMEN DE CUOTAS');
+console.log('========================================');
+
+console.log(
+  'Total cuotas:',
+  resumenCuotas.totalCuotas
+);
+
+console.log(
+  'Cuotas con pago:',
+  resumenCuotas.cuotasConPago
+);
+
+console.log(
+  'Cuotas pendientes:',
+  resumenCuotas.cuotasPendientes
+);
+
+console.log(
+  'Total pagado:',
+  resumenCuotas.totalPagado
+);
+
+console.log(
+  'Total pendiente:',
+  resumenCuotas.totalPendiente
+);
+
+console.log('========================================');
+console.log('');
+
+// ========================================================
+// BLOQUEAR RECÁLCULO SI YA EXISTEN PAGOS
+// ========================================================
+
+if (
+  resumenCuotas.cuotasConPago > 0
+) {
+
+  throw new Error(
+    'No se puede modificar el plan financiero porque ya existen pagos registrados.'
+  );
+
+}
 
   // ========================================================
   // CALCULAR ESTRUCTURA FINANCIERA
