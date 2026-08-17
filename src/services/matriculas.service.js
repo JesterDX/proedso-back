@@ -3222,100 +3222,154 @@ async function obtenerCuotasPlan(
 
   return result.rows;
 }
+// ==========================================================
+// OBTENER RESUMEN DE CUOTAS DEL PLAN
+// ==========================================================
 
-// ==========================================================
-// VALIDAR SI EXISTEN PAGOS
-// ==========================================================
 async function obtenerResumenCuotasPlan(
   client,
   planPagoAlumnoId
 ) {
 
-  const result = await client.query(
-    `
-    SELECT
-      COUNT(*) AS total_cuotas,
+  const result =
+    await client.query(
+      `
+      SELECT
 
-      COUNT(*) FILTER (
-        WHERE
-          COALESCE(monto_pagado, 0) > 0
-          OR estado IN ('PAGADO', 'PARCIAL')
-      ) AS cuotas_con_pago,
+        COUNT(*) AS total_cuotas,
 
-      COUNT(*) FILTER (
-        WHERE
-          COALESCE(monto_pagado, 0) = 0
-          AND COALESCE(estado, '') NOT IN ('PAGADO', 'PARCIAL')
-      ) AS cuotas_pendientes,
+        COUNT(*) FILTER (
+          WHERE
+            COALESCE(monto_pagado, 0) > 0
+            OR estado IN ('PAGADO', 'PARCIAL')
+        ) AS cuotas_con_pago,
 
-      COALESCE(
-        SUM(
-          CASE
-            WHEN
-              COALESCE(monto_pagado, 0) > 0
-              OR estado IN ('PAGADO', 'PARCIAL')
-            THEN COALESCE(monto_pagado, 0)
-            ELSE 0
-          END
-        ),
-        0
-      ) AS total_pagado,
+        COUNT(*) FILTER (
+          WHERE
+            COALESCE(monto_pagado, 0) = 0
+            AND COALESCE(estado, '') NOT IN (
+              'PAGADO',
+              'PARCIAL'
+            )
+        ) AS cuotas_pendientes,
 
-      COALESCE(
-        SUM(
-          CASE
-            WHEN
-              COALESCE(monto_pagado, 0) = 0
-              AND COALESCE(estado, '') NOT IN ('PAGADO', 'PARCIAL')
-            THEN COALESCE(monto, 0)
-            ELSE 0
-          END
-        ),
-        0
-      ) AS total_pendiente
+        COALESCE(
+          SUM(
+            CASE
+              WHEN
+                COALESCE(monto_pagado, 0) > 0
+                OR estado IN ('PAGADO', 'PARCIAL')
+              THEN COALESCE(monto_pagado, 0)
 
-    FROM cuotas
-    WHERE plan_pago_alumno_id = $1
-    `,
-    [planPagoAlumnoId]
-  );
+              ELSE 0
+            END
+          ),
+          0
+        ) AS total_pagado,
 
-  const fila = result.rows[0];
+        COALESCE(
+          SUM(
+            CASE
+              WHEN
+                COALESCE(monto_pagado, 0) = 0
+                AND COALESCE(estado, '') NOT IN (
+                  'PAGADO',
+                  'PARCIAL'
+                )
+              THEN COALESCE(monto, 0)
+
+              ELSE 0
+            END
+          ),
+          0
+        ) AS total_pendiente
+
+      FROM cuotas
+
+      WHERE plan_pago_alumno_id = $1
+      `,
+      [
+        planPagoAlumnoId
+      ]
+    );
+
+  const fila =
+    result.rows[0];
 
   return {
-    totalCuotas: Number(fila.total_cuotas || 0),
-    cuotasConPago: Number(fila.cuotas_con_pago || 0),
-    cuotasPendientes: Number(fila.cuotas_pendientes || 0),
-    totalPagado: Number(fila.total_pagado || 0),
-    totalPendiente: Number(fila.total_pendiente || 0)
+
+    totalCuotas:
+      Number(
+        fila.total_cuotas || 0
+      ),
+
+    cuotasConPago:
+      Number(
+        fila.cuotas_con_pago || 0
+      ),
+
+    cuotasPendientes:
+      Number(
+        fila.cuotas_pendientes || 0
+      ),
+
+    totalPagado:
+      Number(
+        fila.total_pagado || 0
+      ),
+
+    totalPendiente:
+      Number(
+        fila.total_pendiente || 0
+      )
+
   };
 }
+
+
+// ==========================================================
+// OBTENER CUOTAS DEL PLAN
+// ==========================================================
 
 async function obtenerCuotasPlan(
   client,
   planPagoAlumnoId
 ) {
 
-  const result = await client.query(
-    `
-    SELECT
-      id,
-      numero_cuota,
-      fecha_vencimiento,
-      monto,
-      monto_pagado,
-      estado,
-      plan_pago_alumno_id
-    FROM cuotas
-    WHERE plan_pago_alumno_id = $1
-    ORDER BY numero_cuota ASC, id ASC
-    `,
-    [planPagoAlumnoId]
-  );
+  const result =
+    await client.query(
+      `
+      SELECT
+
+        id,
+
+        numero_cuota,
+
+        fecha_vencimiento,
+
+        monto,
+
+        monto_pagado,
+
+        estado,
+
+        plan_pago_alumno_id
+
+      FROM cuotas
+
+      WHERE plan_pago_alumno_id = $1
+
+      ORDER BY
+        numero_cuota ASC,
+        id ASC
+      `,
+      [
+        planPagoAlumnoId
+      ]
+    );
 
   return result.rows;
 }
-
 
 // ==========================================================
 // CREAR PLAN FINANCIERO COMPLETO
