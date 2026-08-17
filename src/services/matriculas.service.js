@@ -4147,6 +4147,43 @@ const resumenCuotas =
     planPagoActual.id
   );
 
+  console.log('');
+console.log('========================================');
+console.log('🔎 VERIFICACIÓN REAL DE PAGOS');
+console.log('========================================');
+
+console.log(
+  '🆔 Plan pago alumno:',
+  planPagoActual.id
+);
+
+console.log(
+  '📊 RESUMEN:',
+  JSON.stringify(
+    resumenCuotas,
+    null,
+    2
+  )
+);
+
+const cuotasDebug =
+  await obtenerCuotasPlan(
+    client,
+    planPagoActual.id
+  );
+
+console.log(
+  '💳 CUOTAS:',
+  JSON.stringify(
+    cuotasDebug,
+    null,
+    2
+  )
+);
+
+console.log('========================================');
+console.log('');
+
 console.log('');
 console.log('========================================');
 console.log('💳 RESUMEN DE CUOTAS');
