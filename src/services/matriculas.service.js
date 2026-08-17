@@ -3199,87 +3199,121 @@ function generarFechasCuotas(
 // OBTENER PLAN DE PAGO ACTUAL
 // ==========================================================
 
-async function obtenerPlanPagoAlumno(
+async function obtenerCuotasPlan(
   client,
-  matriculaId
+  planPagoAlumnoId
 ) {
+  const result = await client.query(
+    `
+    SELECT
+      id,
+      numero_cuota,
+      fecha_vencimiento,
+      monto,
+      monto_pagado,
+      estado,
+      plan_pago_alumno_id
+    FROM cuotas
+    WHERE plan_pago_alumno_id = $1
+    ORDER BY numero_cuota ASC, id ASC
+    `,
+    [planPagoAlumnoId]
+  );
 
-  const result =
-    await client.query(
-      `
-      SELECT *
-      FROM planes_pago_alumno
-      WHERE matricula_id = $1
-      ORDER BY id DESC
-      LIMIT 1
-      `,
-      [matriculaId]
-    );
-
-  return result.rows[0] || null;
+  return result.rows;
 }
 
 // ==========================================================
 // VALIDAR SI EXISTEN PAGOS
 // ==========================================================
-
-async function validarPlanSinPagos(
+async function obtenerResumenCuotasPlan(
   client,
   planPagoAlumnoId
 ) {
 
-  const result =
-    await client.query(
-      `
-      SELECT
-        COUNT(*) FILTER (
-          WHERE
-            COALESCE(monto_pagado, 0) > 0
-            OR estado IN (
-              'PAGADO',
-              'PARCIAL'
-            )
-        ) AS cuotas_con_pago,
+  const result = await client.query(
+    `
+    SELECT
+      COUNT(*) AS total_cuotas,
 
-        COALESCE(
-          SUM(
-            COALESCE(
-              monto_pagado,
-              0
-            )
-          ),
-          0
-        ) AS total_pagado
+      COUNT(*) FILTER (
+        WHERE
+          COALESCE(monto_pagado, 0) > 0
+          OR estado IN ('PAGADO', 'PARCIAL')
+      ) AS cuotas_con_pago,
 
-      FROM cuotas
+      COUNT(*) FILTER (
+        WHERE
+          COALESCE(monto_pagado, 0) = 0
+          AND COALESCE(estado, '') NOT IN ('PAGADO', 'PARCIAL')
+      ) AS cuotas_pendientes,
 
-      WHERE plan_pago_alumno_id = $1
-      `,
-      [planPagoAlumnoId]
-    );
+      COALESCE(
+        SUM(
+          CASE
+            WHEN
+              COALESCE(monto_pagado, 0) > 0
+              OR estado IN ('PAGADO', 'PARCIAL')
+            THEN COALESCE(monto_pagado, 0)
+            ELSE 0
+          END
+        ),
+        0
+      ) AS total_pagado,
 
-  const fila =
-    result.rows[0];
+      COALESCE(
+        SUM(
+          CASE
+            WHEN
+              COALESCE(monto_pagado, 0) = 0
+              AND COALESCE(estado, '') NOT IN ('PAGADO', 'PARCIAL')
+            THEN COALESCE(monto, 0)
+            ELSE 0
+          END
+        ),
+        0
+      ) AS total_pendiente
 
-  const cuotasConPago =
-    Number(
-      fila.cuotas_con_pago || 0
-    );
+    FROM cuotas
+    WHERE plan_pago_alumno_id = $1
+    `,
+    [planPagoAlumnoId]
+  );
 
-  const totalPagado =
-    Number(
-      fila.total_pagado || 0
-    );
+  const fila = result.rows[0];
 
-  if (
-    cuotasConPago > 0 ||
-    totalPagado > 0
-  ) {
+  return {
+    totalCuotas: Number(fila.total_cuotas || 0),
+    cuotasConPago: Number(fila.cuotas_con_pago || 0),
+    cuotasPendientes: Number(fila.cuotas_pendientes || 0),
+    totalPagado: Number(fila.total_pagado || 0),
+    totalPendiente: Number(fila.total_pendiente || 0)
+  };
+}
 
-    throw new Error(
-      'No se puede recalcular automáticamente el plan de pagos porque la matrícula ya tiene pagos registrados. Los pagos existentes deben conservarse.'
-    );
-  }
+async function obtenerCuotasPlan(
+  client,
+  planPagoAlumnoId
+) {
+
+  const result = await client.query(
+    `
+    SELECT
+      id,
+      numero_cuota,
+      fecha_vencimiento,
+      monto,
+      monto_pagado,
+      estado,
+      plan_pago_alumno_id
+    FROM cuotas
+    WHERE plan_pago_alumno_id = $1
+    ORDER BY numero_cuota ASC, id ASC
+    `,
+    [planPagoAlumnoId]
+  );
+
+  return result.rows;
 }
 
 
