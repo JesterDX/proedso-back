@@ -4022,11 +4022,6 @@ async function crearPlanFinanciero(
   return planPagoAlumno;
 
 }
-
-
-// ==========================================================
-// RECALCULAR PLAN FINANCIERO
-// ==========================================================
 async function recalcularPlanFinanciero(
   client,
   {
@@ -4044,10 +4039,6 @@ async function recalcularPlanFinanciero(
     certificacionIncluidaPersonalizada = null,
     costoCertificacionPersonalizado = null,
 
-    // ======================================================
-    // NUEVO:
-    // CRONOGRAMA CONFIRMADO POR EL FRONT
-    // ======================================================
     cronogramaConfirmado = null
   }
 ) {
@@ -4057,62 +4048,44 @@ async function recalcularPlanFinanciero(
   console.log('🔥 RECALCULAR PLAN FINANCIERO');
   console.log('========================================');
 
-  console.log(
-    '🔥 Matrícula:',
-    matriculaId
-  );
-
+  console.log('🔥 Matrícula:', matriculaId);
   console.log(
     '🔥 Monto cuota personalizado:',
     montoCuotaPersonalizada
   );
-
   console.log(
     '🔥 Matrícula personalizada:',
     matriculaPersonalizada
   );
-
   console.log(
     '🔥 Certificación incluida:',
     certificacionIncluidaPersonalizada
   );
-
   console.log(
     '🔥 Costo certificación:',
     costoCertificacionPersonalizado
   );
-
   console.log(
     '🔥 Modalidad:',
     modalidadPago
   );
-
   console.log(
     '🔥 Cronograma confirmado:',
     cronogramaConfirmado
   );
 
-  if (
-    Array.isArray(
-      cronogramaConfirmado
-    )
-  ) {
-
-    console.log(
-      '🔥 Cantidad elementos cronograma:',
-      cronogramaConfirmado.length
-    );
-
-  }
-
   console.log('========================================');
   console.log('');
 
   // ========================================================
-  // SI NO EXISTE PLAN DE PAGO
+  // 1. SI NO EXISTE PLAN DE PAGO
   // ========================================================
 
   if (!planPagoActual) {
+
+    console.log(
+      '🟢 No existe plan de pago. Se creará uno nuevo.'
+    );
 
     return await crearPlanFinanciero(
       client,
@@ -4139,191 +4112,250 @@ async function recalcularPlanFinanciero(
 
         costoCertificacionPersonalizado,
 
-        // NUEVO
         cronogramaConfirmado
       }
     );
-
-    // ========================================================
-// VALIDAR PAGOS QUE BLOQUEAN EL RECÁLCULO
-// ========================================================
-
-const pagosBloqueantesResult =
-  await client.query(
-    `
-    SELECT
-      id,
-      numero_cuota,
-      monto_programado,
-      monto_pagado,
-      estado
-
-    FROM cuotas
-
-    WHERE plan_pago_alumno_id = $1
-
-      AND (
-        COALESCE(monto_pagado, 0) > 0
-        OR estado IN ('PAGADO', 'PARCIAL')
-      )
-
-      AND numero_cuota IS NOT NULL
-
-    ORDER BY
-      numero_cuota ASC,
-      id ASC
-    `,
-    [
-      planPagoActual.id
-    ]
-  );
-
-const pagosBloqueantes =
-  pagosBloqueantesResult.rows;
-
-console.log('');
-console.log('========================================');
-console.log('🔐 PAGOS QUE BLOQUEAN RECÁLCULO');
-console.log('========================================');
-
-console.log(
-  JSON.stringify(
-    pagosBloqueantes,
-    null,
-    2
-  )
-);
-
-console.log('========================================');
-console.log('');
-
-if (
-  pagosBloqueantes.length > 0
-) {
-
-  throw new Error(
-    'No se puede modificar el plan financiero porque existen cuotas mensuales con pagos registrados.'
-  );
-}
   }
 
   // ========================================================
-  // VALIDAR QUE NO EXISTAN PAGOS
+  // 2. OBTENER TODAS LAS CUOTAS ACTUALES
   // ========================================================
 
-// ========================================================
-// VALIDAR PAGOS EXISTENTES
-// ========================================================
-
-const resumenCuotas =
-  await obtenerResumenCuotasPlan(
-    client,
-    planPagoActual.id
-  );
+  const cuotasActuales =
+    await obtenerCuotasPlan(
+      client,
+      planPagoActual.id
+    );
 
   console.log('');
-console.log('========================================');
-console.log('🔎 VERIFICACIÓN REAL DE PAGOS');
-console.log('========================================');
+  console.log('========================================');
+  console.log('💳 CUOTAS ACTUALES');
+  console.log('========================================');
 
-console.log(
-  '🆔 Plan pago alumno:',
-  planPagoActual.id
-);
-
-console.log(
-  '📊 RESUMEN:',
-  JSON.stringify(
-    resumenCuotas,
-    null,
-    2
-  )
-);
-
-const cuotasDebug =
-  await obtenerCuotasPlan(
-    client,
-    planPagoActual.id
+  console.log(
+    JSON.stringify(
+      cuotasActuales,
+      null,
+      2
+    )
   );
 
-console.log(
-  '💳 CUOTAS:',
-  JSON.stringify(
-    cuotasDebug,
-    null,
-    2
-  )
-);
-
-console.log('========================================');
-console.log('');
-
-console.log('');
-console.log('========================================');
-console.log('💳 RESUMEN DE CUOTAS');
-console.log('========================================');
-
-console.log(
-  'Total cuotas:',
-  resumenCuotas.totalCuotas
-);
-
-console.log(
-  'Cuotas con pago:',
-  resumenCuotas.cuotasConPago
-);
-
-console.log(
-  'Cuotas pendientes:',
-  resumenCuotas.cuotasPendientes
-);
-
-console.log(
-  'Total pagado:',
-  resumenCuotas.totalPagado
-);
-
-console.log(
-  'Total pendiente:',
-  resumenCuotas.totalPendiente
-);
-
-console.log('========================================');
-console.log('');
-
-// ========================================================
-// BLOQUEAR RECÁLCULO SI YA EXISTEN PAGOS
-// ========================================================
-
-if (
-  resumenCuotas.cuotasConPago > 0
-) {
-
-  throw new Error(
-    'No se puede modificar el plan financiero porque ya existen pagos registrados.'
-  );
-
-}
+  console.log('========================================');
+  console.log('');
 
   // ========================================================
-  // CALCULAR ESTRUCTURA FINANCIERA
+  // 3. CLASIFICAR CUOTAS
+  // ========================================================
+
+  const cuotasConPago =
+    cuotasActuales.filter(
+      cuota => {
+
+        const montoPagado =
+          Number(
+            cuota.monto_pagado || 0
+          );
+
+        const estado =
+          String(
+            cuota.estado || ''
+          ).toUpperCase();
+
+        return (
+          montoPagado > 0 ||
+          estado === 'PAGADO' ||
+          estado === 'PARCIAL'
+        );
+      }
+    );
+
+  const cuotasPendientes =
+    cuotasActuales.filter(
+      cuota => {
+
+        const montoPagado =
+          Number(
+            cuota.monto_pagado || 0
+          );
+
+        const estado =
+          String(
+            cuota.estado || ''
+          ).toUpperCase();
+
+        return (
+          montoPagado === 0 &&
+          estado !== 'PAGADO' &&
+          estado !== 'PARCIAL'
+        );
+      }
+    );
+
+  // ========================================================
+  // 4. SEPARAR POR CONCEPTO
+  // ========================================================
+
+  const matriculaPagada =
+    cuotasConPago.find(
+      cuota =>
+        Number(
+          cuota.numero_cuota
+        ) === 0
+    ) || null;
+
+  const cuotasMensualesPagadas =
+    cuotasConPago.filter(
+      cuota =>
+        Number(
+          cuota.numero_cuota
+        ) > 0
+    );
+
+  const certificacionPagada =
+    cuotasConPago.find(
+      cuota =>
+        cuota.numero_cuota === null
+      ||
+        cuota.numero_cuota === undefined
+    ) || null;
+
+  // ========================================================
+  // 5. CALCULAR TOTAL REALMENTE PAGADO
+  // ========================================================
+
+  const totalPagado =
+    cuotasConPago.reduce(
+      (
+        total,
+        cuota
+      ) => {
+
+        return (
+          total +
+          Number(
+            cuota.monto_pagado || 0
+          )
+        );
+
+      },
+      0
+    );
+
+  console.log('');
+  console.log('========================================');
+  console.log('💰 PAGOS CONSERVADOS');
+  console.log('========================================');
+
+  console.log(
+    '💰 Matrícula pagada:',
+    matriculaPagada
+      ? Number(
+          matriculaPagada.monto_pagado || 0
+        )
+      : 0
+  );
+
+  console.log(
+    '💰 Cuotas mensuales pagadas:',
+    cuotasMensualesPagadas.length
+  );
+
+  console.log(
+    '💰 Certificación pagada:',
+    certificacionPagada
+      ? Number(
+          certificacionPagada.monto_pagado || 0
+        )
+      : 0
+  );
+
+  console.log(
+    '💰 TOTAL PAGADO:',
+    totalPagado
+  );
+
+  console.log('========================================');
+  console.log('');
+
+  // ========================================================
+  // 6. DETECTAR CAMBIO DE PLAN
+  // ========================================================
+
+  const cambioPlan =
+    Number(
+      planPagoActual.plan_precio_id
+    ) !==
+    Number(
+      planPrecio.id
+    );
+
+  const modalidadActual =
+    String(
+      planPagoActual.modalidad_pago ||
+      ''
+    ).toUpperCase();
+
+  const modalidadNueva =
+    String(
+      modalidadPago ||
+      'MENSUAL'
+    ).toUpperCase();
+
+  const cambioModalidad =
+    modalidadActual !==
+    modalidadNueva;
+
+  console.log('');
+  console.log('========================================');
+  console.log('🔎 CAMBIOS FINANCIEROS');
+  console.log('========================================');
+
+  console.log(
+    '🔎 Plan anterior:',
+    planPagoActual.plan_precio_id
+  );
+
+  console.log(
+    '🔎 Plan nuevo:',
+    planPrecio.id
+  );
+
+  console.log(
+    '🔎 Cambio de plan:',
+    cambioPlan
+  );
+
+  console.log(
+    '🔎 Modalidad anterior:',
+    modalidadActual
+  );
+
+  console.log(
+    '🔎 Modalidad nueva:',
+    modalidadNueva
+  );
+
+  console.log(
+    '🔎 Cambio modalidad:',
+    cambioModalidad
+  );
+
+  console.log('========================================');
+  console.log('');
+
+  // ========================================================
+  // 7. CALCULAR NUEVA ESTRUCTURA FINANCIERA
   // ========================================================
 
   console.log(
-    '🔥 VALORES QUE ENTRAN A calcularEstructuraFinanciera:',
-    {
-      montoCuotaPersonalizada,
-      matriculaPersonalizada,
-      certificacionIncluidaPersonalizada,
-      costoCertificacionPersonalizado
-    }
+    '🔥 CALCULANDO NUEVA ESTRUCTURA FINANCIERA...'
   );
 
   const financiera =
     calcularEstructuraFinanciera(
       planPrecio,
 
-      modalidadPago,
+      modalidadNueva,
 
       montoCuotaPersonalizada,
 
@@ -4334,8 +4366,77 @@ if (
       costoCertificacionPersonalizado
     );
 
+  console.log('');
+  console.log('========================================');
+  console.log('💰 NUEVA ESTRUCTURA FINANCIERA');
+  console.log('========================================');
+
+  console.log(
+    JSON.stringify(
+      financiera,
+      null,
+      2
+    )
+  );
+
+  console.log('========================================');
+  console.log('');
+
   // ========================================================
-  // FECHA BASE
+  // 8. CALCULAR SALDO DEL NUEVO PLAN
+  // ========================================================
+  //
+  // El total nuevo representa todo lo que debería pagar
+  // el alumno según el nuevo plan.
+  //
+  // Restamos lo que realmente ya pagó.
+  //
+  // EJEMPLO:
+  //
+  // Nuevo plan = 6380
+  // Pagado      = 1090
+  //
+  // Pendiente   = 5290
+  //
+  // ========================================================
+
+  const nuevoMontoTotal =
+    Number(
+      financiera.montoTotal || 0
+    );
+
+  const saldoNuevoPlan =
+    Math.max(
+      0,
+      nuevoMontoTotal -
+      totalPagado
+    );
+
+  console.log('');
+  console.log('========================================');
+  console.log('🧮 SALDO NUEVO PLAN');
+  console.log('========================================');
+
+  console.log(
+    '🧮 Nuevo monto total:',
+    nuevoMontoTotal
+  );
+
+  console.log(
+    '🧮 Total ya pagado:',
+    totalPagado
+  );
+
+  console.log(
+    '🧮 Saldo nuevo:',
+    saldoNuevoPlan
+  );
+
+  console.log('========================================');
+  console.log('');
+
+  // ========================================================
+  // 9. FECHA BASE
   // ========================================================
 
   const fechaBaseCuotas =
@@ -4352,21 +4453,10 @@ if (
   }
 
   // ========================================================
-  // DETERMINAR CRONOGRAMA
-  //
-  // SI EL FRONT MANDÓ UN CRONOGRAMA CONFIRMADO:
-  //
-  //     NO GENERAMOS NUEVAS FECHAS.
-  //
-  // USAMOS EXACTAMENTE LAS FECHAS
-  // QUE CONFIRMÓ LA ENCARGADA.
-  //
-  // SI NO VIENE:
-  //
-  //     SE MANTIENE EL COMPORTAMIENTO ANTERIOR.
+  // 10. GENERAR CRONOGRAMA NUEVO
   // ========================================================
 
-  let cronogramaFinal = null;
+  let cronogramaFinal = [];
 
   if (
     Array.isArray(
@@ -4412,81 +4502,15 @@ if (
   } else {
 
     console.log(
-      '⚠️ NO HAY CRONOGRAMA CONFIRMADO.'
+      '🔄 GENERANDO CRONOGRAMA AUTOMÁTICAMENTE.'
     );
 
-    console.log(
-      '🔄 Generando cronograma automáticamente.'
-    );
-
-console.log('');
-console.log('========================================');
-console.log('🟡 GENERANDO FECHAS DE CUOTAS');
-console.log('========================================');
-
-console.log(
-  '🟡 fechaBaseCuotas:',
-  fechaBaseCuotas
-);
-
-console.log(
-  '🟡 financiera:',
-  JSON.stringify(
-    financiera,
-    null,
-    2
-  )
-);
-
-console.log(
-  '🟡 financiera.cuotas:',
-  financiera.cuotas
-);
-
-console.log(
-  '🟡 ¿cuotas es array?:',
-  Array.isArray(
-    financiera.cuotas
-  )
-);
-
-console.log(
-  '🟡 cantidad cuotas:',
-  Array.isArray(financiera.cuotas)
-    ? financiera.cuotas.length
-    : 'NO ES ARRAY'
-);
-
-console.log(
-  '🟡 modalidad:',
-  financiera.modalidad
-);
-
-console.log('========================================');
-
-const cuotasConFechas =
-  generarFechasCuotas(
-    fechaBaseCuotas,
-    financiera.cuotas,
-    financiera.modalidad
-  );
-
-console.log('========================================');
-console.log('🟢 GENERÓ FECHAS CORRECTAMENTE');
-
-console.log(
-  '🟢 cuotasConFechas:',
-  JSON.stringify(
-    cuotasConFechas,
-    null,
-    2
-  )
-);
-
-console.log('========================================');
-
-
-    cronogramaFinal = [];
+    const cuotasConFechas =
+      generarFechasCuotas(
+        fechaBaseCuotas,
+        financiera.cuotas,
+        financiera.modalidad
+      );
 
     // ------------------------------------------------------
     // MATRÍCULA
@@ -4505,14 +4529,19 @@ console.log('========================================');
           'Matrícula',
 
         fecha_programada:
-          fechaMatricula,
+          normalizarFecha(
+            fechaMatricula
+          ),
 
         fecha_vencimiento:
-          fechaMatricula,
+          normalizarFecha(
+            fechaMatricula
+          ),
 
         monto:
-          financiera.montoMatricula
-
+          Number(
+            financiera.montoMatricula
+          )
       });
     }
 
@@ -4534,16 +4563,19 @@ console.log('========================================');
           'Cuota mensual',
 
         fecha_programada:
-          cuota.fecha_programada,
+          normalizarFecha(
+            cuota.fecha_programada
+          ),
 
         fecha_vencimiento:
-          cuota.fecha_vencimiento,
+          normalizarFecha(
+            cuota.fecha_vencimiento
+          ),
 
         monto:
           Number(
-            cuota.monto
+            cuota.monto || 0
           )
-
       });
     }
 
@@ -4579,14 +4611,15 @@ console.log('========================================');
           fechaCertificacion,
 
         monto:
-          financiera.montoCertificacion
-
+          Number(
+            financiera.montoCertificacion
+          )
       });
     }
   }
 
   // ========================================================
-  // VALIDAR CRONOGRAMA
+  // 11. VALIDAR CRONOGRAMA
   // ========================================================
 
   if (
@@ -4602,14 +4635,79 @@ console.log('========================================');
   }
 
   // ========================================================
-  // NOTA
+  // 12. CONSERVAR PAGOS
+  // ========================================================
+  //
+  // MUY IMPORTANTE:
+  //
+  // NO eliminamos ninguna cuota pagada.
+  //
+  // Primero eliminamos solamente las cuotas que NO tienen
+  // ningún pago.
+  //
+  // Las cuotas parciales tampoco se eliminan.
+  //
   // ========================================================
 
-  const notaPago =
-    `${planPrecio.nombre} - Máquinas: ${nombresMaquinas.join(', ')}`;
+  console.log('');
+  console.log('========================================');
+  console.log('🔐 CONSERVANDO CUOTAS PAGADAS');
+  console.log('========================================');
+
+  console.log(
+    '🔐 Cantidad cuotas con pago:',
+    cuotasConPago.length
+  );
+
+  console.log(
+    '🔐 Cantidad cuotas pendientes:',
+    cuotasPendientes.length
+  );
+
+  console.log('========================================');
+  console.log('');
 
   // ========================================================
-  // OBTENER CONCEPTOS
+  // 13. ELIMINAR SOLAMENTE CUOTAS SIN PAGO
+  // ========================================================
+
+  await client.query(
+    `
+    DELETE FROM cuotas
+
+    WHERE plan_pago_alumno_id = $1
+
+      AND COALESCE(monto_pagado, 0) = 0
+
+      AND COALESCE(estado, '') NOT IN (
+        'PAGADO',
+        'PARCIAL'
+      )
+    `,
+    [
+      planPagoActual.id
+    ]
+  );
+
+  // ========================================================
+  // 14. DETERMINAR CUÁNTO DEBE GENERARSE
+  // ========================================================
+  //
+  // Lo nuevo debe cubrir:
+  //
+  //     NUEVO TOTAL
+  //     -
+  //     LO YA PAGADO
+  //
+  // Esto es especialmente importante cuando cambia el plan.
+  //
+  // ========================================================
+
+  let saldoPorGenerar =
+    saldoNuevoPlan;
+
+  // ========================================================
+  // 15. CONCEPTOS
   // ========================================================
 
   const conceptoMatricula =
@@ -4642,64 +4740,29 @@ console.log('========================================');
   }
 
   // ========================================================
-  // BORRAR CUOTAS ANTERIORES
+  // 16. IDENTIFICAR CONCEPTOS YA PAGADOS
   // ========================================================
 
-  await client.query(
-    `
-    DELETE FROM cuotas
-    WHERE plan_pago_alumno_id = $1
-    `,
-    [
-      planPagoActual.id
-    ]
-  );
+  const matriculaYaPagada =
+    Boolean(
+      matriculaPagada
+    );
+
+  const certificacionYaPagada =
+    Boolean(
+      certificacionPagada
+    );
 
   // ========================================================
-  // ACTUALIZAR PLAN DE PAGO
+  // 17. RECORRER CRONOGRAMA NUEVO
   // ========================================================
-
-  await client.query(
-    `
-    UPDATE planes_pago_alumno
-
-    SET
-      plan_precio_id = $1,
-      monto_total = $2,
-      monto_matricula = $3,
-      monto_certificacion = $4,
-      cantidad_cuotas = $5,
-      monto_cuota = $6,
-      nota_pago = $7,
-      modalidad_pago = $8
-
-    WHERE id = $9
-    `,
-    [
-
-      planPrecio.id,
-
-      financiera.montoTotal,
-
-      financiera.montoMatricula,
-
-      financiera.montoCertificacion,
-
-      financiera.cantidadCuotasFinal,
-
-      financiera.montoCuotaFinal,
-
-      notaPago,
-
-      financiera.modalidad,
-
-      planPagoActual.id
-
-    ]
-  );
-
-  // ========================================================
-  // INSERTAR CRONOGRAMA OFICIAL
+  //
+  // Aquí NO insertamos nuevamente matrícula/certificación
+  // si ya existen.
+  //
+  // Y las cuotas mensuales nuevas se generan solamente
+  // hasta cubrir el saldo pendiente.
+  //
   // ========================================================
 
   for (
@@ -4713,19 +4776,53 @@ console.log('========================================');
       )
         .toUpperCase();
 
-    // ------------------------------------------------------
+    const montoProgramado =
+      Number(
+        item.monto || 0
+      );
+
+    if (
+      montoProgramado <= 0
+    ) {
+      continue;
+    }
+
+    // ======================================================
     // MATRÍCULA
-    // ------------------------------------------------------
+    // ======================================================
 
     if (
       item.numero_cuota === 0 ||
       concepto.includes('MATR')
     ) {
 
+      // -----------------------------------------------
+      // YA FUE PAGADA
+      // -----------------------------------------------
+
       if (
-        Number(
-          item.monto
-        ) <= 0
+        matriculaYaPagada
+      ) {
+
+        console.log(
+          '🔐 Matrícula ya pagada. No se modifica.'
+        );
+
+        continue;
+      }
+
+      // -----------------------------------------------
+      // SI NO ESTÁ PAGADA
+      // -----------------------------------------------
+
+      const montoDisponible =
+        Math.min(
+          montoProgramado,
+          saldoPorGenerar
+        );
+
+      if (
+        montoDisponible <= 0
       ) {
         continue;
       }
@@ -4749,31 +4846,51 @@ console.log('========================================');
             item.fecha_vencimiento,
 
           monto_programado:
-            Number(
-              item.monto
-            ),
+            montoDisponible,
 
           observaciones:
             'Pago de matrícula'
         }
       );
 
+      saldoPorGenerar -=
+        montoDisponible;
+
       continue;
     }
 
-    // ------------------------------------------------------
+    // ======================================================
     // CERTIFICACIÓN
-    // ------------------------------------------------------
+    // ======================================================
 
     if (
       item.numero_cuota === null ||
       concepto.includes('CERT')
     ) {
 
+      // -----------------------------------------------
+      // YA FUE PAGADA
+      // -----------------------------------------------
+
       if (
-        Number(
-          item.monto
-        ) <= 0
+        certificacionYaPagada
+      ) {
+
+        console.log(
+          '🔐 Certificación ya pagada. No se modifica.'
+        );
+
+        continue;
+      }
+
+      const montoDisponible =
+        Math.min(
+          montoProgramado,
+          saldoPorGenerar
+        );
+
+      if (
+        montoDisponible <= 0
       ) {
         continue;
       }
@@ -4797,21 +4914,44 @@ console.log('========================================');
             item.fecha_vencimiento,
 
           monto_programado:
-            Number(
-              item.monto
-            ),
+            montoDisponible,
 
           observaciones:
             'Carpeta y certificación'
         }
       );
 
+      saldoPorGenerar -=
+        montoDisponible;
+
       continue;
     }
 
-    // ------------------------------------------------------
+    // ======================================================
     // CUOTA NORMAL
+    // ======================================================
+
+    if (
+      saldoPorGenerar <= 0
+    ) {
+      break;
+    }
+
     // ------------------------------------------------------
+    // NUEVO MONTO
+    // ------------------------------------------------------
+
+    const montoNuevaCuota =
+      Math.min(
+        montoProgramado,
+        saldoPorGenerar
+      );
+
+    if (
+      montoNuevaCuota <= 0
+    ) {
+      continue;
+    }
 
     await insertarCuota(
       client,
@@ -4832,18 +4972,133 @@ console.log('========================================');
           item.fecha_vencimiento,
 
         monto_programado:
-          Number(
-            item.monto
-          ),
+          montoNuevaCuota,
 
         observaciones:
           `Cuota ${item.numero_cuota} de ${financiera.cantidadCuotasFinal} - ${financiera.modalidad}`
       }
     );
+
+    saldoPorGenerar -=
+      montoNuevaCuota;
   }
 
   // ========================================================
-  // DEVOLVER PLAN ACTUALIZADO
+  // 18. SI QUEDÓ SALDO
+  // ========================================================
+  //
+  // Puede ocurrir si el cronograma recibido por el FRONT
+  // no alcanza para cubrir el nuevo saldo.
+  //
+  // Lo informamos claramente.
+  //
+  // ========================================================
+
+  if (
+    saldoPorGenerar > 0.01
+  ) {
+
+    console.warn('');
+    console.warn(
+      '⚠️ QUEDÓ SALDO SIN GENERAR:',
+      saldoPorGenerar
+    );
+    console.warn('');
+  }
+
+  // ========================================================
+  // 19. ACTUALIZAR PLAN DE PAGO
+  // ========================================================
+
+  const notaPago =
+    `${planPrecio.nombre} - Máquinas: ${nombresMaquinas.join(', ')}`;
+
+  await client.query(
+    `
+    UPDATE planes_pago_alumno
+
+    SET
+      plan_precio_id = $1,
+      monto_total = $2,
+      monto_matricula = $3,
+      monto_certificacion = $4,
+      cantidad_cuotas = $5,
+      monto_cuota = $6,
+      nota_pago = $7,
+      modalidad_pago = $8
+
+    WHERE id = $9
+    `,
+    [
+      planPrecio.id,
+
+      financiera.montoTotal,
+
+      financiera.montoMatricula,
+
+      financiera.montoCertificacion,
+
+      financiera.cantidadCuotasFinal,
+
+      financiera.montoCuotaFinal,
+
+      notaPago,
+
+      financiera.modalidad,
+
+      planPagoActual.id
+    ]
+  );
+
+  // ========================================================
+  // 20. INFORMACIÓN FINAL
+  // ========================================================
+
+  console.log('');
+  console.log('========================================');
+  console.log('✅ RECÁLCULO FINALIZADO');
+  console.log('========================================');
+
+  console.log(
+    '✅ Plan nuevo:',
+    planPrecio.id
+  );
+
+  console.log(
+    '✅ Cambio de plan:',
+    cambioPlan
+  );
+
+  console.log(
+    '✅ Cambio de modalidad:',
+    cambioModalidad
+  );
+
+  console.log(
+    '✅ Total nuevo:',
+    nuevoMontoTotal
+  );
+
+  console.log(
+    '✅ Total pagado conservado:',
+    totalPagado
+  );
+
+  console.log(
+    '✅ Saldo generado:',
+    saldoNuevoPlan
+  );
+
+  console.log(
+    '⚠️ Saldo no generado:',
+    saldoPorGenerar
+  );
+
+  console.log('========================================');
+  console.log('');
+
+  // ========================================================
+  // 21. DEVOLVER PLAN ACTUALIZADO
   // ========================================================
 
   return await obtenerPlanPagoAlumno(
@@ -4851,9 +5106,7 @@ console.log('========================================');
     matriculaId
   );
 }
-
-
-// ==========================================================
+//==========================
 // DETERMINAR MÁQUINAS
 // ==========================================================
 
