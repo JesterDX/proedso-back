@@ -3381,6 +3381,9 @@ async function obtenerResumenCuotasPlan(
 // ==========================================================
 // OBTENER CUOTAS DEL PLAN
 // ==========================================================
+// ==========================================================
+// OBTENER CUOTAS DE UN PLAN
+// ==========================================================
 
 async function obtenerCuotasPlan(
   client,
@@ -3391,19 +3394,14 @@ async function obtenerCuotasPlan(
     await client.query(
       `
       SELECT
-
         id,
-
         numero_cuota,
-
         fecha_vencimiento,
 
-        monto,
+        monto_programado AS monto,
 
         monto_pagado,
-
         estado,
-
         plan_pago_alumno_id
 
       FROM cuotas
@@ -3421,7 +3419,6 @@ async function obtenerCuotasPlan(
 
   return result.rows;
 }
-
 // ==========================================================
 // CREAR PLAN FINANCIERO COMPLETO
 // ==========================================================
