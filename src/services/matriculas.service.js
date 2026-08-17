@@ -4146,6 +4146,68 @@ async function recalcularPlanFinanciero(
         cronogramaConfirmado
       }
     );
+
+    // ========================================================
+// VALIDAR PAGOS QUE BLOQUEAN EL RECÁLCULO
+// ========================================================
+
+const pagosBloqueantesResult =
+  await client.query(
+    `
+    SELECT
+      id,
+      numero_cuota,
+      monto_programado,
+      monto_pagado,
+      estado
+
+    FROM cuotas
+
+    WHERE plan_pago_alumno_id = $1
+
+      AND (
+        COALESCE(monto_pagado, 0) > 0
+        OR estado IN ('PAGADO', 'PARCIAL')
+      )
+
+      AND numero_cuota IS NOT NULL
+
+    ORDER BY
+      numero_cuota ASC,
+      id ASC
+    `,
+    [
+      planPagoActual.id
+    ]
+  );
+
+const pagosBloqueantes =
+  pagosBloqueantesResult.rows;
+
+console.log('');
+console.log('========================================');
+console.log('🔐 PAGOS QUE BLOQUEAN RECÁLCULO');
+console.log('========================================');
+
+console.log(
+  JSON.stringify(
+    pagosBloqueantes,
+    null,
+    2
+  )
+);
+
+console.log('========================================');
+console.log('');
+
+if (
+  pagosBloqueantes.length > 0
+) {
+
+  throw new Error(
+    'No se puede modificar el plan financiero porque existen cuotas mensuales con pagos registrados.'
+  );
+}
   }
 
   // ========================================================
