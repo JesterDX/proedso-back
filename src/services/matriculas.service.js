@@ -3258,6 +3258,9 @@ async function obtenerCuotasPlan(
 // ==========================================================
 // OBTENER RESUMEN DE CUOTAS DEL PLAN
 // ==========================================================
+// ==========================================================
+// OBTENER RESUMEN DE CUOTAS DE UN PLAN
+// ==========================================================
 
 async function obtenerResumenCuotasPlan(
   client,
@@ -3292,7 +3295,8 @@ async function obtenerResumenCuotasPlan(
               WHEN
                 COALESCE(monto_pagado, 0) > 0
                 OR estado IN ('PAGADO', 'PARCIAL')
-              THEN COALESCE(monto_pagado, 0)
+              THEN
+                COALESCE(monto_pagado, 0)
 
               ELSE 0
             END
@@ -3309,7 +3313,8 @@ async function obtenerResumenCuotasPlan(
                   'PAGADO',
                   'PARCIAL'
                 )
-              THEN COALESCE(monto, 0)
+              THEN
+                COALESCE(monto_programado, 0)
 
               ELSE 0
             END
@@ -3358,8 +3363,6 @@ async function obtenerResumenCuotasPlan(
 
   };
 }
-
-
 // ==========================================================
 // OBTENER CUOTAS DEL PLAN
 // ==========================================================
