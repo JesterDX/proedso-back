@@ -906,6 +906,39 @@ async function obtenerPlanCursoDetalle(
   return result.rows[0] || null;
 }
 
+
+// ==========================================================
+// OBTENER PLAN DE PAGO DE UNA MATRÍCULA
+// ==========================================================
+
+async function obtenerPlanPagoAlumno(
+  client,
+  matriculaId
+) {
+
+  const result =
+    await client.query(
+      `
+      SELECT
+        ppa.*,
+
+        ppa.id AS plan_pago_alumno_id
+
+      FROM planes_pago_alumno ppa
+
+      WHERE ppa.matricula_id = $1
+
+      ORDER BY ppa.id DESC
+
+      LIMIT 1
+      `,
+      [
+        matriculaId
+      ]
+    );
+
+  return result.rows[0] || null;
+}
 // ==========================================================
 // OBTENER MÁQUINA POR NOMBRE
 // ==========================================================
