@@ -3232,26 +3232,41 @@ function generarFechasCuotas(
 // OBTENER PLAN DE PAGO ACTUAL
 // ==========================================================
 
+// ==========================================================
+// OBTENER CUOTAS DE UN PLAN
+// ==========================================================
+
 async function obtenerCuotasPlan(
   client,
   planPagoAlumnoId
 ) {
-  const result = await client.query(
-    `
-    SELECT
-      id,
-      numero_cuota,
-      fecha_vencimiento,
-      monto,
-      monto_pagado,
-      estado,
-      plan_pago_alumno_id
-    FROM cuotas
-    WHERE plan_pago_alumno_id = $1
-    ORDER BY numero_cuota ASC, id ASC
-    `,
-    [planPagoAlumnoId]
-  );
+
+  const result =
+    await client.query(
+      `
+      SELECT
+        id,
+        numero_cuota,
+        fecha_vencimiento,
+
+        monto_programado AS monto,
+
+        monto_pagado,
+        estado,
+        plan_pago_alumno_id
+
+      FROM cuotas
+
+      WHERE plan_pago_alumno_id = $1
+
+      ORDER BY
+        numero_cuota ASC,
+        id ASC
+      `,
+      [
+        planPagoAlumnoId
+      ]
+    );
 
   return result.rows;
 }
