@@ -9,7 +9,289 @@ const {
 // ==========================================================
 
 function normalizarNumero(valor, defecto = 0) {
-  const numero = Number(valor);
+  const numero = Number(valor);// =====================================================
+// 5. RECALCULAR / CREAR PLAN FINANCIERO
+// =====================================================
+
+if (vieneFinanciero) {
+
+  console.log('');
+  console.log('========================================');
+  console.log('💰 PROCESAMIENTO FINANCIERO');
+  console.log('========================================');
+
+  console.log(
+    '🆔 Matrícula:',
+    id
+  );
+
+  console.log(
+    '💳 Plan de pago actual:',
+    planPagoActual
+  );
+
+  // ===================================================
+  // OBTENER MÁQUINAS
+  // ===================================================
+
+  const maquinasResult =
+    await client.query(
+      `
+      SELECT
+        mm.maquina_id,
+        mm.es_regalo
+      FROM matricula_maquinas mm
+      WHERE mm.matricula_id = $1
+      ORDER BY mm.orden ASC
+      `,
+      [id]
+    );
+
+  const maquinasActuales =
+    maquinasResult.rows;
+
+  // ===================================================
+  // OBTENER TIPO DE CURSO
+  // ===================================================
+
+  const tipoCursoResult =
+    await client.query(
+      `
+      SELECT
+        tc.codigo
+      FROM planes_curso pc
+
+      INNER JOIN tipos_curso tc
+        ON tc.id = pc.tipo_curso_id
+
+      WHERE pc.id = $1
+
+      LIMIT 1
+      `,
+      [
+        data.plan_curso_id
+      ]
+    );
+
+  const tipoCursoCodigo =
+    tipoCursoResult.rows[0]?.codigo || '';
+
+  // ===================================================
+  // OBTENER PRECIO VIGENTE
+  // ===================================================
+
+  const planPrecio =
+    await obtenerPlanPrecioVigente(
+      client,
+      data.plan_curso_id,
+      data.fecha_matricula,
+      maquinasActuales,
+      tipoCursoCodigo
+    );
+
+  if (!planPrecio) {
+
+    throw new Error(
+      'No se encontró un precio vigente para el plan seleccionado.'
+    );
+  }
+
+  // ===================================================
+  // VALORES PERSONALIZADOS
+  // ===================================================
+
+  const montoCuota =
+    data.monto_total !== undefined &&
+    data.monto_total !== null &&
+    data.monto_total !== ''
+      ? data.monto_total
+      : planPagoActual?.monto_cuota ?? null;
+
+  const montoMatricula =
+    data.cuota_inicial !== undefined &&
+    data.cuota_inicial !== null &&
+    data.cuota_inicial !== ''
+      ? data.cuota_inicial
+      : planPagoActual?.monto_matricula ?? null;
+
+  const modalidadPago =
+    data.modalidad_pago !== undefined &&
+    data.modalidad_pago !== null &&
+    data.modalidad_pago !== ''
+      ? data.modalidad_pago
+      : planPagoActual?.modalidad_pago || 'MENSUAL';
+
+  const certificacionIncluida =
+    data.certificacion_incluida !== undefined &&
+    data.certificacion_incluida !== null
+      ? Boolean(
+          data.certificacion_incluida
+        )
+      : Number(
+          planPagoActual?.monto_certificacion || 0
+        ) > 0;
+
+  const costoCertificacion =
+    data.costo_certificacion !== undefined &&
+    data.costo_certificacion !== null &&
+    data.costo_certificacion !== ''
+      ? data.costo_certificacion
+      : planPagoActual?.monto_certificacion ?? null;
+
+  // ===================================================
+  // NOMBRES DE MÁQUINAS
+  // ===================================================
+
+  const nombresMaquinasResult =
+    await client.query(
+      `
+      SELECT
+        ma.nombre
+      FROM matricula_maquinas mm
+
+      INNER JOIN maquinas ma
+        ON ma.id = mm.maquina_id
+
+      WHERE mm.matricula_id = $1
+
+      ORDER BY mm.orden ASC
+      `,
+      [id]
+    );
+
+  const nombresMaquinas =
+    nombresMaquinasResult.rows
+      .map(
+        fila => fila.nombre
+      )
+      .filter(Boolean);
+
+  // ===================================================
+  // CASO 1:
+  // NO EXISTE PLAN DE PAGOS
+  //
+  // MATRÍCULA IMPORTADA
+  // ===================================================
+
+  if (!planPagoActual) {
+
+    console.log('');
+    console.log(
+      '🆕 NO EXISTE PLAN DE PAGOS'
+    );
+
+    console.log(
+      '🆕 Creando plan financiero...'
+    );
+
+    await crearPlanFinanciero(
+      client,
+      {
+        matriculaId: id,
+
+        planPrecio,
+
+        fechaMatricula:
+          data.fecha_matricula,
+
+        fechaInicio:
+          data.fecha_inicio,
+
+        fechaFinEstimada:
+          data.fecha_fin_estimada,
+
+        modalidadPago,
+
+        nombresMaquinas,
+
+        montoCuotaPersonalizada:
+          montoCuota,
+
+        matriculaPersonalizada:
+          montoMatricula,
+
+        certificacionIncluidaPersonalizada:
+          certificacionIncluida,
+
+        costoCertificacionPersonalizado:
+          costoCertificacion,
+
+        cronogramaConfirmado:
+          data.cronograma_confirmado || null
+      }
+    );
+
+    console.log(
+      '✅ PLAN FINANCIERO CREADO'
+    );
+
+  }
+
+  // ===================================================
+  // CASO 2:
+  // YA EXISTE PLAN
+  //
+  // MATRÍCULA NORMAL
+  // ===================================================
+
+  else {
+
+    console.log('');
+    console.log(
+      '♻️ PLAN DE PAGOS EXISTENTE'
+    );
+
+    console.log(
+      '♻️ Recalculando plan financiero...'
+    );
+
+    await recalcularPlanFinanciero(
+      client,
+      {
+        matriculaId: id,
+
+        planPagoActual,
+
+        planPrecio,
+
+        fechaMatricula:
+          data.fecha_matricula,
+
+        fechaInicio:
+          data.fecha_inicio,
+
+        fechaFinEstimada:
+          data.fecha_fin_estimada,
+
+        modalidadPago,
+
+        nombresMaquinas,
+
+        montoCuotaPersonalizada:
+          montoCuota,
+
+        matriculaPersonalizada:
+          montoMatricula,
+
+        certificacionIncluidaPersonalizada:
+          certificacionIncluida,
+
+        costoCertificacionPersonalizado:
+          costoCertificacion,
+
+        cronogramaConfirmado:
+          data.cronograma_confirmado || null
+      }
+    );
+
+    console.log(
+      '✅ PLAN FINANCIERO RECALCULADO'
+    );
+  }
+
+  console.log('========================================');
+  console.log('');
+}
 
   return Number.isFinite(numero)
     ? numero
@@ -488,36 +770,49 @@ const vieneFinanciero =
 console.log('========================================');
 console.log('🔥 ACTUALIZAR MATRÍCULA');
 console.log('🔥 ID:', id);
+
 console.log(
   '🔥 DATA RECIBIDA:',
   JSON.stringify(data, null, 2)
 );
+
 console.log(
   '🔥 PLAN PAGO ACTUAL:',
   planPagoActual
 );
+
 console.log(
   '🔥 VIENE FINANCIERO:',
   vieneFinanciero
 );
-console.log(
-  '🔥 CONDICIÓN RECALCULO:',
-  vieneFinanciero && !!planPagoActual
-);
+
 console.log('========================================');
 
-if (
-  vieneFinanciero &&
-  planPagoActual
-) {
+
+// =====================================================
+// 5. PROCESAR INFORMACIÓN FINANCIERA
+// =====================================================
+
+if (vieneFinanciero) {
+
+  console.log('');
+  console.log('========================================');
+  console.log('💰 PROCESAMIENTO FINANCIERO');
+  console.log('========================================');
 
   console.log(
-    '🔥🔥🔥 ENTRÓ AL RECÁLCULO FINANCIERO 🔥🔥🔥'
+    '🆔 Matrícula:',
+    id
   );
 
-  // ---------------------------------------------------
+  console.log(
+    '💳 Plan de pago actual:',
+    planPagoActual
+  );
+
+  // ===================================================
   // 5.1 OBTENER MÁQUINAS ACTUALES
-  // ---------------------------------------------------
+  // ===================================================
 
   const maquinasResult =
     await client.query(
@@ -536,9 +831,9 @@ if (
     maquinasResult.rows;
 
 
-  // ---------------------------------------------------
+  // ===================================================
   // 5.2 OBTENER TIPO DE CURSO
-  // ---------------------------------------------------
+  // ===================================================
 
   const tipoCursoResult =
     await client.query(
@@ -546,21 +841,26 @@ if (
       SELECT
         tc.codigo
       FROM planes_curso pc
+
       INNER JOIN tipos_curso tc
         ON tc.id = pc.tipo_curso_id
+
       WHERE pc.id = $1
+
       LIMIT 1
       `,
-      [data.plan_curso_id]
+      [
+        data.plan_curso_id
+      ]
     );
 
   const tipoCursoCodigo =
     tipoCursoResult.rows[0]?.codigo || '';
 
 
-  // ---------------------------------------------------
+  // ===================================================
   // 5.3 OBTENER PRECIO VIGENTE
-  // ---------------------------------------------------
+  // ===================================================
 
   const planPrecio =
     await obtenerPlanPrecioVigente(
@@ -572,56 +872,63 @@ if (
     );
 
   if (!planPrecio) {
+
     throw new Error(
       'No se encontró un precio vigente para el plan seleccionado.'
     );
   }
 
 
-  // ---------------------------------------------------
+  // ===================================================
   // 5.4 VALORES PERSONALIZADOS
-  // ---------------------------------------------------
+  // ===================================================
 
   const montoCuota =
     data.monto_total !== undefined &&
     data.monto_total !== null &&
     data.monto_total !== ''
       ? data.monto_total
-      : planPagoActual.monto_cuota;
+      : planPagoActual?.monto_cuota ?? null;
+
 
   const montoMatricula =
     data.cuota_inicial !== undefined &&
     data.cuota_inicial !== null &&
     data.cuota_inicial !== ''
       ? data.cuota_inicial
-      : planPagoActual.monto_matricula;
+      : planPagoActual?.monto_matricula ?? null;
+
 
   const modalidadPago =
     data.modalidad_pago !== undefined &&
     data.modalidad_pago !== null &&
     data.modalidad_pago !== ''
       ? data.modalidad_pago
-      : planPagoActual.modalidad_pago;
+      : planPagoActual?.modalidad_pago || 'MENSUAL';
+
 
   const certificacionIncluida =
     data.certificacion_incluida !== undefined &&
     data.certificacion_incluida !== null
-      ? Boolean(data.certificacion_incluida)
+      ? Boolean(
+          data.certificacion_incluida
+        )
       : Number(
-          planPagoActual.monto_certificacion || 0
+          planPagoActual?.monto_certificacion || 0
         ) > 0;
+
 
   const costoCertificacion =
     data.costo_certificacion !== undefined &&
     data.costo_certificacion !== null &&
     data.costo_certificacion !== ''
       ? data.costo_certificacion
-      : planPagoActual.monto_certificacion;
+      : planPagoActual?.monto_certificacion ?? null;
 
 
-  // ---------------------------------------------------
+  // ===================================================
   // 5.5 NOMBRES DE LAS MÁQUINAS
-  // ---------------------------------------------------
+  // ===================================================
 
   const nombresMaquinasResult =
     await client.query(
@@ -629,9 +936,12 @@ if (
       SELECT
         ma.nombre
       FROM matricula_maquinas mm
+
       INNER JOIN maquinas ma
         ON ma.id = mm.maquina_id
+
       WHERE mm.matricula_id = $1
+
       ORDER BY mm.orden ASC
       `,
       [id]
@@ -639,89 +949,151 @@ if (
 
   const nombresMaquinas =
     nombresMaquinasResult.rows
-      .map(fila => fila.nombre)
+      .map(
+        fila => fila.nombre
+      )
       .filter(Boolean);
 
-  console.log('');
-console.log('========================================');
-console.log('🔥🔥🔥 CRONOGRAMA QUE LLEGA AL UPDATE');
-console.log('========================================');
 
-console.log(
-  '📦 data.cuotas_personalizadas:',
-  JSON.stringify(
-    data.cuotas_personalizadas,
-    null,
-    2
-  )
-);
+  // ===================================================
+  // 5.6 MATRÍCULA IMPORTADA SIN PLAN DE PAGOS
+  // ===================================================
 
-console.log(
-  '📦 data.cronograma_confirmado:',
-  JSON.stringify(
-    data.cronograma_confirmado,
-    null,
-    2
-  )
-);
+  if (!planPagoActual) {
 
-console.log('========================================');
-await recalcularPlanFinanciero(
-  client,
-  {
-    matriculaId:
-      id,
-
-    planPagoActual,
-
-    planPrecio,
-
-    fechaMatricula:
-      data.fecha_matricula,
-
-    fechaInicio:
-      data.fecha_inicio,
-
-    fechaFinEstimada:
-      data.fecha_fin_estimada,
-
-    modalidadPago,
-
-    nombresMaquinas,
-
-    montoCuotaPersonalizada:
-      montoCuota,
-
-    matriculaPersonalizada:
-      montoMatricula,
-
-    certificacionIncluidaPersonalizada:
-      certificacionIncluida,
-
-    costoCertificacionPersonalizado:
-      costoCertificacion,
-
-    cronogramaConfirmado:
-      data.cronograma_confirmado || null
-  }
-);
-}
-
-    // =====================================================
-    // 6. HISTORIAL
-    // =====================================================
-
-    await registrarHistorial(
-      client,
-      {
-        matricula_id: id,
-        accion: 'ACTUALIZACION',
-        descripcion:
-          'Se actualizaron los datos de la matrícula y su información financiera.'
-      },
-      user
+    console.log('');
+    console.log(
+      '🆕 MATRÍCULA SIN PLAN DE PAGOS'
     );
 
+    console.log(
+      '🆕 Creando plan financiero...'
+    );
+
+    await crearPlanFinanciero(
+      client,
+      {
+        matriculaId:
+          id,
+
+        planPrecio,
+
+        fechaMatricula:
+          data.fecha_matricula,
+
+        fechaInicio:
+          data.fecha_inicio,
+
+        fechaFinEstimada:
+          data.fecha_fin_estimada,
+
+        modalidadPago,
+
+        nombresMaquinas,
+
+        montoCuotaPersonalizada:
+          montoCuota,
+
+        matriculaPersonalizada:
+          montoMatricula,
+
+        certificacionIncluidaPersonalizada:
+          certificacionIncluida,
+
+        costoCertificacionPersonalizado:
+          costoCertificacion,
+
+        cronogramaConfirmado:
+          data.cronograma_confirmado || null
+      }
+    );
+
+    console.log(
+      '✅ PLAN FINANCIERO CREADO'
+    );
+
+  }
+
+
+  // ===================================================
+  // 5.7 MATRÍCULA CON PLAN DE PAGOS
+  // ===================================================
+
+  else {
+
+    console.log('');
+    console.log(
+      '♻️ PLAN DE PAGOS EXISTENTE'
+    );
+
+    console.log(
+      '♻️ Recalculando plan financiero...'
+    );
+
+    await recalcularPlanFinanciero(
+      client,
+      {
+        matriculaId:
+          id,
+
+        planPagoActual,
+
+        planPrecio,
+
+        fechaMatricula:
+          data.fecha_matricula,
+
+        fechaInicio:
+          data.fecha_inicio,
+
+        fechaFinEstimada:
+          data.fecha_fin_estimada,
+
+        modalidadPago,
+
+        nombresMaquinas,
+
+        montoCuotaPersonalizada:
+          montoCuota,
+
+        matriculaPersonalizada:
+          montoMatricula,
+
+        certificacionIncluidaPersonalizada:
+          certificacionIncluida,
+
+        costoCertificacionPersonalizado:
+          costoCertificacion,
+
+        cronogramaConfirmado:
+          data.cronograma_confirmado || null
+      }
+    );
+
+    console.log(
+      '✅ PLAN FINANCIERO RECALCULADO'
+    );
+  }
+
+  console.log('========================================');
+  console.log('');
+}
+
+
+// =====================================================
+// 6. HISTORIAL
+// =====================================================
+
+await registrarHistorial(
+  client,
+  {
+    matricula_id: id,
+    accion: 'ACTUALIZACION',
+    descripcion:
+      'Se actualizaron los datos de la matrícula y su información financiera.'
+  },
+  user
+);
 
     // =====================================================
     // 7. COMMIT
