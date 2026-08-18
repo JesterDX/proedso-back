@@ -496,7 +496,7 @@ async function actualizarMatricula(
     // =====================================================
 
     if (
-      Array.isArray(data.maquinas)
+        Array.isArray(data.maquinas_seleccionadas)
     ) {
 
       console.log('');
@@ -665,7 +665,7 @@ async function actualizarMatricula(
 
       data.cronograma_confirmado !== undefined ||
 
-      Array.isArray(data.maquinas) ||
+        Array.isArray(data.maquinas_seleccionadas) ||
 
       data.plan_curso_id !== undefined;
 
@@ -692,7 +692,7 @@ async function actualizarMatricula(
 
     console.log(
       '🔥 CAMBIO DE MÁQUINAS:',
-      Array.isArray(data.maquinas)
+        Array.isArray(data.maquinas_seleccionadas)
     );
 
     console.log('========================================');
