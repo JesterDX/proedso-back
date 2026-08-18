@@ -472,32 +472,19 @@ async function actualizarMatricula(
 
         ]
       );
-
 // =====================================================
 // 3. ACTUALIZAR MÁQUINAS
-//
-// IMPORTANTE:
-//
-// NO eliminamos todas las máquinas.
-//
-// - Máquina existente y seleccionada:
-//     se conserva.
-//
-// - Máquina nueva:
-//     se inserta con sus horas/sesiones.
-//
-// - Máquina quitada sin prácticas:
-//     se elimina.
-//
-// - Máquina quitada con prácticas:
-//     se marca RETIRADA.
-//
-// Así evitamos romper las FK de prácticas.
 // =====================================================
 
-if (
-  Array.isArray(data.maquinas_seleccionadas)
-) {
+const cambioMaquinas =
+  Array.isArray(data.maquinas_seleccionadas);
+
+console.log(
+  '🔥 CAMBIO DE MÁQUINAS:',
+  cambioMaquinas
+);
+
+if (cambioMaquinas) {
 
   console.log('');
   console.log('========================================');
@@ -505,7 +492,7 @@ if (
   console.log('========================================');
 
   console.log(
-    '📦 Máquinas recibidas:',
+    '📦 MÁQUINAS RECIBIDAS:',
     JSON.stringify(
       data.maquinas_seleccionadas,
       null,
@@ -515,26 +502,71 @@ if (
 
 
   // ===================================================
-  // 3.1 OBTENER MÁQUINAS ACTUALES
+  // 3.1 NORMALIZAR MÁQUINAS RECIBIDAS
+  // ===================================================
+
+  const maquinasNuevas =
+    data.maquinas_seleccionadas
+      .map((maquina) => {
+
+        const maquinaId =
+          Number(
+            maquina?.maquina_id ??
+            maquina?.maquinaId ??
+            maquina?.id ??
+            maquina
+          );
+
+        return {
+          maquina_id: maquinaId,
+
+          es_regalo:
+            Boolean(
+              maquina?.es_regalo ??
+              maquina?.esRegalo ??
+              false
+            )
+        };
+
+      })
+      .filter(
+        maquina =>
+          Number.isFinite(
+            maquina.maquina_id
+          ) &&
+          maquina.maquina_id > 0
+      );
+
+
+  console.log(
+    '🚜 MÁQUINAS NORMALIZADAS:',
+    maquinasNuevas
+  );
+
+
+  // ===================================================
+  // 3.2 OBTENER MÁQUINAS ACTUALES
   // ===================================================
 
   const maquinasActualesResult =
     await client.query(
       `
       SELECT
-        mm.*,
+        id,
+        matricula_id,
+        maquina_id,
+        orden,
+        es_regalo,
+        horas_asignadas,
+        sesiones_totales,
+        sesiones_completadas,
+        estado
 
-        EXISTS (
-          SELECT 1
-          FROM practicas_asignaciones pa
-          WHERE pa.matricula_maquina_id = mm.id
-        ) AS tiene_practicas
+      FROM matricula_maquinas
 
-      FROM matricula_maquinas mm
+      WHERE matricula_id = $1
 
-      WHERE mm.matricula_id = $1
-
-      ORDER BY mm.orden ASC
+      ORDER BY orden ASC, id ASC
       `,
       [id]
     );
@@ -544,12 +576,8 @@ if (
     maquinasActualesResult.rows;
 
 
-  console.log('');
   console.log(
-    '🚜 MÁQUINAS ACTUALES EN BD:'
-  );
-
-  console.log(
+    '🚜 MÁQUINAS ACTUALES BD:',
     JSON.stringify(
       maquinasActuales,
       null,
@@ -559,59 +587,7 @@ if (
 
 
   // ===================================================
-  // 3.2 NORMALIZAR MÁQUINAS RECIBIDAS
-  // ===================================================
-
-  const maquinasNuevas =
-    data.maquinas_seleccionadas
-      .map((maquina) => {
-
-        const maquinaId =
-          maquina?.maquina_id ??
-          maquina?.maquinaId ??
-          maquina?.id ??
-          maquina;
-
-        const esRegalo =
-          Boolean(
-            maquina?.es_regalo ??
-            maquina?.esRegalo ??
-            false
-          );
-
-        return {
-          maquina_id:
-            Number(maquinaId),
-
-          es_regalo:
-            esRegalo
-        };
-
-      })
-      .filter(
-        maquina =>
-          Number.isFinite(
-            maquina.maquina_id
-          )
-      );
-
-
-  console.log('');
-  console.log(
-    '🚜 MÁQUINAS NORMALIZADAS:'
-  );
-
-  console.log(
-    JSON.stringify(
-      maquinasNuevas,
-      null,
-      2
-    )
-  );
-
-
-  // ===================================================
-  // 3.3 EVITAR DUPLICADOS
+  // 3.3 IDs DE MÁQUINAS NUEVAS
   // ===================================================
 
   const idsNuevos =
@@ -624,7 +600,7 @@ if (
 
 
   // ===================================================
-  // 3.4 PROCESAR MÁQUINAS ACTUALES
+  // 3.4 RETIRAR MÁQUINAS QUE YA NO ESTÁN
   // ===================================================
 
   for (
@@ -640,139 +616,38 @@ if (
       );
 
 
-    // -------------------------------------------------
-    // LA MÁQUINA SIGUE SELECCIONADA
-    // -------------------------------------------------
-
     if (
       sigueSeleccionada
     ) {
 
-      const maquinaNueva =
-        maquinasNuevas.find(
-          maquina =>
-            maquina.maquina_id ===
-            Number(
-              maquinaActual.maquina_id
-            )
-        );
-
-
-      // Actualizar solamente datos modificables.
-      //
-      // NO tocamos:
-      // sesiones_completadas
-      // horas_asignadas
-      // sesiones_totales
-      // estado
-      //
-      // porque podrían existir prácticas.
-
-      await client.query(
-        `
-        UPDATE matricula_maquinas
-
-        SET
-          orden = $1,
-          es_regalo = $2
-
-        WHERE id = $3
-        `,
-        [
-          maquinasNuevas.indexOf(
-            maquinaNueva
-          ) + 1,
-
-          maquinaNueva.es_regalo,
-
-          maquinaActual.id
-        ]
-      );
-
-
-      // Si anteriormente estaba RETIRADA
-      // y vuelve a ser seleccionada,
-      // la reactivamos.
-
-      if (
-        maquinaActual.estado ===
-        'RETIRADA'
-      ) {
-
-        await client.query(
-          `
-          UPDATE matricula_maquinas
-
-          SET estado = 'PENDIENTE'
-
-          WHERE id = $1
-          `,
-          [
-            maquinaActual.id
-          ]
-        );
-
-      }
-
-
       continue;
+
     }
 
 
-    // -------------------------------------------------
-    // LA MÁQUINA YA NO ESTÁ SELECCIONADA
-    // -------------------------------------------------
-
     console.log(
-      '🚜 Máquina retirada:',
+      '🚫 Máquina retirada:',
       maquinaActual.maquina_id
     );
 
 
-    // =================================================
-    // TIENE PRÁCTICAS
-    // =================================================
-
-    if (
-      maquinaActual.tiene_practicas
-    ) {
-
-      console.log(
-        '⚠️ Tiene prácticas → RETIRADA'
-      );
-
-
-      await client.query(
-        `
-        UPDATE matricula_maquinas
-
-        SET
-          estado = 'RETIRADA'
-
-        WHERE id = $1
-        `,
-        [
-          maquinaActual.id
-        ]
-      );
-
-
-      continue;
-    }
-
-
-    // =================================================
-    // NO TIENE PRÁCTICAS
-    // =================================================
-
-    console.log(
-      '🗑️ No tiene prácticas → eliminando'
-    );
-
+    // -------------------------------------------------
+    // NO HACEMOS DELETE
+    //
+    // Esto es importante porque puede existir:
+    //
+    // practicas_asignaciones
+    // practicas_sesiones
+    // practicas_sesiones_grupales_detalle
+    //
+    // Por eso usamos RETIRADA.
+    // -------------------------------------------------
 
     await client.query(
       `
-      DELETE FROM matricula_maquinas
+      UPDATE matricula_maquinas
+
+      SET estado = 'RETIRADA'
 
       WHERE id = $1
       `,
@@ -785,7 +660,79 @@ if (
 
 
   // ===================================================
-  // 3.5 INSERTAR MÁQUINAS NUEVAS
+  // 3.5 OBTENER PRECIO / HORAS DEL PLAN
+  // ===================================================
+
+  const tipoCursoResult =
+    await client.query(
+      `
+      SELECT
+        tc.codigo
+
+      FROM planes_curso pc
+
+      INNER JOIN tipos_curso tc
+        ON tc.id = pc.tipo_curso_id
+
+      WHERE pc.id = $1
+
+      LIMIT 1
+      `,
+      [
+        data.plan_curso_id
+      ]
+    );
+
+
+  const tipoCursoCodigo =
+    tipoCursoResult
+      .rows[0]
+      ?.codigo || '';
+
+
+  // ===================================================
+  // 3.6 BUSCAR PRECIO VIGENTE
+  // ===================================================
+
+  const planPrecio =
+    await obtenerPlanPrecioVigente(
+      client,
+      data.plan_curso_id,
+      data.fecha_matricula,
+      maquinasNuevas.map(
+        maquina => ({
+          maquina_id:
+            maquina.maquina_id,
+
+          es_regalo:
+            maquina.es_regalo
+        })
+      ),
+      tipoCursoCodigo
+    );
+
+
+  if (!planPrecio) {
+
+    throw new Error(
+      'No se encontró un precio vigente para el plan seleccionado.'
+    );
+
+  }
+
+
+  console.log(
+    '💰 PLAN PRECIO:',
+    JSON.stringify(
+      planPrecio,
+      null,
+      2
+    )
+  );
+
+
+  // ===================================================
+  // 3.7 INSERTAR / REACTIVAR MÁQUINAS
   // ===================================================
 
   for (
@@ -797,53 +744,95 @@ if (
     const maquina =
       maquinasNuevas[index];
 
+    const orden =
+      index + 1;
 
-    const yaExiste =
-      maquinasActuales.some(
-        maquinaActual =>
-          Number(
-            maquinaActual.maquina_id
-          ) ===
-          Number(
-            maquina.maquina_id
-          )
+
+    // -------------------------------------------------
+    // ¿YA EXISTE?
+    // -------------------------------------------------
+
+    const existenteResult =
+      await client.query(
+        `
+        SELECT *
+
+        FROM matricula_maquinas
+
+        WHERE matricula_id = $1
+          AND maquina_id = $2
+
+        LIMIT 1
+        `,
+        [
+          id,
+          maquina.maquina_id
+        ]
       );
 
 
-    if (
-      yaExiste
-    ) {
+    const existente =
+      existenteResult.rows[0];
+
+
+    // -------------------------------------------------
+    // SI YA EXISTE
+    // -------------------------------------------------
+
+    if (existente) {
+
+      console.log(
+        '♻️ Máquina existente:',
+        maquina.maquina_id
+      );
+
+
+      await client.query(
+        `
+        UPDATE matricula_maquinas
+
+        SET
+          orden = $1,
+          es_regalo = $2,
+          estado = 'PENDIENTE'
+
+        WHERE id = $3
+        `,
+        [
+          orden,
+          maquina.es_regalo,
+          existente.id
+        ]
+      );
+
 
       continue;
 
     }
 
 
-    console.log('');
+    // -------------------------------------------------
+    // MÁQUINA NUEVA
+    // -------------------------------------------------
+
     console.log(
-      '➕ NUEVA MÁQUINA:',
+      '➕ Nueva máquina:',
       maquina.maquina_id
     );
 
 
     // =================================================
     // OBTENER HORAS DE PRÁCTICA
-    //
-    // Misma fuente que utiliza
-    // crearAsignacionPracticas()
     // =================================================
 
     const horasResult =
       await client.query(
         `
-        SELECT
-          horas
+        SELECT horas
 
         FROM plan_horas_practica
 
-        WHERE
-          maquina_id = $1
-
+        WHERE maquina_id = $1
           AND plan_curso_id = $2
 
         LIMIT 1
@@ -866,106 +855,103 @@ if (
     ) {
 
       throw new Error(
-        `No se encontraron horas de práctica para la máquina ${maquina.maquina_id} en el plan de curso ${data.plan_curso_id}.`
+        `La máquina ${maquina.maquina_id} no tiene horas de práctica configuradas para este plan.`
       );
 
     }
 
 
     const sesionesTotales =
-      horas * 2;
+      Math.round(
+        horas * 2
+      );
 
 
-    console.log(
-      '⏱️ Horas asignadas:',
-      horas
-    );
+    if (
+      sesionesTotales <= 0
+    ) {
 
-    console.log(
-      '📚 Sesiones totales:',
-      sesionesTotales
-    );
+      throw new Error(
+        `La máquina ${maquina.maquina_id} no tiene sesiones válidas configuradas.`
+      );
+
+    }
 
 
     // =================================================
-    // INSERTAR
+    // INSERTAR MÁQUINA
     // =================================================
 
-    await insertarMatriculaMaquina(
-      client,
-      {
-        matricula_id:
+    const nuevaMaquinaResult =
+      await client.query(
+        `
+        INSERT INTO matricula_maquinas (
+          matricula_id,
+          maquina_id,
+          orden,
+          es_regalo,
+          horas_asignadas,
+          sesiones_totales,
+          sesiones_completadas,
+          estado
+        )
+
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          0,
+          'PENDIENTE'
+        )
+
+        RETURNING *
+        `,
+        [
           id,
-
-        maquina_id:
           maquina.maquina_id,
-
-        orden:
-          index + 1,
-
-        es_regalo:
+          orden,
           maquina.es_regalo,
-
-        horas_asignadas:
           horas,
-
-        sesiones_totales:
           sesionesTotales
-      }
-    );
+        ]
+      );
+
+
+    const nuevaMaquina =
+      nuevaMaquinaResult.rows[0];
 
 
     console.log(
-      '✅ Máquina insertada correctamente'
+      '✅ MÁQUINA INSERTADA:',
+      nuevaMaquina
+    );
+
+
+    // =================================================
+    // CREAR ASIGNACIÓN DE PRÁCTICAS
+    // =================================================
+
+    await crearAsignacionPracticas(
+      id,
+      client
     );
 
   }
 
-
-  // ===================================================
-  // 3.6 REORDENAR MÁQUINAS
-  // ===================================================
-
-  for (
-    let index = 0;
-    index < maquinasNuevas.length;
-    index++
-  ) {
-
-    const maquina =
-      maquinasNuevas[index];
-
-
-    await client.query(
-      `
-      UPDATE matricula_maquinas
-
-      SET orden = $1
-
-      WHERE
-        matricula_id = $2
-
-        AND maquina_id = $3
-      `,
-      [
-        index + 1,
-        id,
-        maquina.maquina_id
-      ]
-    );
-
-  }
-
-
-  console.log('');
-  console.log(
-    '✅ MÁQUINAS SINCRONIZADAS CORRECTAMENTE'
-  );
 
   console.log(
     '========================================'
   );
-  console.log('');
+
+  console.log(
+    '✅ MÁQUINAS SINCRONIZADAS'
+  );
+
+  console.log(
+    '========================================');
 
 }
     // =====================================================
