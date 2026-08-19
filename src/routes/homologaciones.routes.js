@@ -17,17 +17,13 @@ router.get(
 );
 
 
-// Obtener una
-router.get(
-  '/:id',
-  controller.obtener
-);
+// ============================================================
+// GOOGLE SHEETS
+// ============================================================
 
-
-// Actualizar directamente desde tabla
-router.put(
-  '/:id',
-  controller.actualizar
+router.post(
+  '/importar-sheets',
+  controller.importarSheets
 );
 
 
@@ -35,14 +31,14 @@ router.put(
 // PAGOS
 // ============================================================
 
-// Listar pagos de una homologación
+// Listar pagos
 router.get(
   '/:id/pagos',
   controller.listarPagos
 );
 
 
-// Registrar pago + información de boleta
+// Registrar pago
 router.post(
   '/:id/pagos',
   controller.registrarPago
@@ -57,12 +53,20 @@ router.delete(
 
 
 // ============================================================
-// GOOGLE SHEETS
+// HOMOLOGACIÓN INDIVIDUAL
 // ============================================================
 
-router.post(
-  '/importar-sheets',
-  controller.importarSheets
+// Obtener
+router.get(
+  '/:id',
+  controller.obtener
+);
+
+
+// Actualizar
+router.put(
+  '/:id',
+  controller.actualizar
 );
 
 
