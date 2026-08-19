@@ -1,741 +1,538 @@
 const service =
-require('../services/homologaciones-service');
+  require('../services/homologaciones-service');
 
+
+// ============================================================
+// IMPORTAR DESDE GOOGLE SHEETS
+// POST /api/homologaciones/importar-sheets
+// ============================================================
 
 async function importarSheets(req, res) {
 
-    try {
+  try {
 
-        const data = await service.importarDesdeSheets();
+    const data =
+      await service.importarDesdeSheets();
 
-        res.json({
-            ok: true,
-            ...data
-        });
 
-    } catch (error) {
+    res.json({
 
-        res.status(500).json({
-            ok: false,
-            message: error.message
-        });
+      ok: true,
 
-    }
+      ...data
 
-}
+    });
 
-async function listar(req,res){
+  }
+  catch (error) {
 
-    try{
+    console.error(
+      'Error importando homologaciones:',
+      error
+    );
 
-        const data=await service.listarHomologaciones();
 
-        res.json({
+    res.status(500).json({
 
-            ok:true,
+      ok: false,
 
-            data
+      message:
+        error.message ||
+        'Error al importar homologaciones.'
 
-        });
+    });
 
-    }
-
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
-
-    }
-
-}
-async function obtener(req,res){
-
-    try{
-
-        const data=await service.obtenerHomologacion(
-
-            req.params.id
-
-        );
-
-        res.json({
-
-            ok:true,
-
-            data
-
-        });
-
-    }
-
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
-
-    }
+  }
 
 }
 
-async function crear(req,res){
 
-    try{
+// ============================================================
+// LISTAR HOMOLOGACIONES
+// GET /api/homologaciones
+// ============================================================
 
-        const data=await service.crearHomologacion(
+async function listar(req, res) {
 
-            req.body
+  try {
 
-        );
+    const data =
+      await service.listarHomologaciones();
 
-        res.json({
 
-            ok:true,
+    res.json({
 
-            data
+      ok: true,
 
-        });
+      data
+
+    });
+
+  }
+  catch (error) {
+
+    console.error(
+      'Error listando homologaciones:',
+      error
+    );
+
+
+    res.status(500).json({
+
+      ok: false,
+
+      message:
+        error.message ||
+        'Error al listar homologaciones.'
+
+    });
+
+  }
+
+}
+
+
+// ============================================================
+// OBTENER HOMOLOGACIÓN
+// GET /api/homologaciones/:id
+// ============================================================
+
+async function obtener(req, res) {
+
+  try {
+
+    const id =
+      Number(req.params.id);
+
+
+    if (!Number.isInteger(id) || id <= 0) {
+
+      return res.status(400).json({
+
+        ok: false,
+
+        message:
+          'El ID de la homologación no es válido.'
+
+      });
 
     }
 
-    catch(error){
 
-        res.status(500).json({
+    const data =
+      await service.obtenerHomologacion(
+        id
+      );
 
-            ok:false,
 
-            message:error.message
+    return res.json({
 
-        });
+      ok: true,
 
-    }
+      data
+
+    });
+
+  }
+  catch (error) {
+
+    console.error(
+      'Error obteniendo homologación:',
+      error
+    );
+
+
+    const status =
+      error.message ===
+      'Homologación no encontrada.'
+        ? 404
+        : 500;
+
+
+    return res.status(status).json({
+
+      ok: false,
+
+      message:
+        error.message ||
+        'Error al obtener homologación.'
+
+    });
+
+  }
 
 }
 
-async function actualizar(req,res){
 
-    try{
+// ============================================================
+// ACTUALIZAR HOMOLOGACIÓN
+// PUT /api/homologaciones/:id
+// ============================================================
 
-        const data=await service.actualizarEstado(
+async function actualizar(req, res) {
 
-            req.params.id,
+  try {
 
-            req.body
+    const id =
+      Number(req.params.id);
 
-        );
 
-        res.json({
+    if (!Number.isInteger(id) || id <= 0) {
 
-            ok:true,
+      return res.status(400).json({
 
-            data
+        ok: false,
 
-        });
+        message:
+          'El ID de la homologación no es válido.'
 
-    }
-
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
+      });
 
     }
 
-}
-async function eliminar(req,res){
 
-    try{
+    if (
+      !req.body ||
+      typeof req.body !== 'object'
+    ) {
 
-        await service.eliminarHomologacion(
+      return res.status(400).json({
 
-            req.params.id
+        ok: false,
 
-        );
+        message:
+          'No se recibieron datos para actualizar.'
 
-        res.json({
-
-            ok:true,
-
-            message:"Registro eliminado."
-
-        });
+      });
 
     }
 
-    catch(error){
 
-        res.status(500).json({
+    const data =
+      await service.actualizarHomologacion(
 
-            ok:false,
+        id,
 
-            message:error.message
+        req.body
 
-        });
+      );
 
-    }
 
-}
-module.exports={
+    return res.json({
 
-    listar,
+      ok: true,
 
-    obtener,
+      message:
+        'Homologación actualizada correctamente.',
 
-    crear,
+      data
 
-    actualizar,
+    });
 
-    eliminar
+  }
+  catch (error) {
 
-};
-async function listar(req,res){
+    console.error(
+      'Error actualizando homologación:',
+      error
+    );
 
-    try{
 
-        const data=await service.listarHomologaciones();
+    const status =
+      error.message ===
+      'Homologación no encontrada.'
+        ? 404
+        : 400;
 
-        res.json({
 
-            ok:true,
+    return res.status(status).json({
 
-            data
+      ok: false,
 
-        });
+      message:
+        error.message ||
+        'Error al actualizar homologación.'
 
-    }
+    });
 
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
-
-    }
-
-}
-async function obtener(req,res){
-
-    try{
-
-        const data=await service.obtenerHomologacion(
-
-            req.params.id
-
-        );
-
-        res.json({
-
-            ok:true,
-
-            data
-
-        });
-
-    }
-
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
-
-    }
+  }
 
 }
 
-async function crear(req,res){
 
-    try{
+// ============================================================
+// REGISTRAR PAGO
+// POST /api/homologaciones/:id/pagos
+// ============================================================
 
-        const data=await service.crearHomologacion(
+async function registrarPago(req, res) {
 
-            req.body
+  try {
 
-        );
+    const homologacionId =
+      Number(req.params.id);
 
-        res.json({
 
-            ok:true,
+    if (
+      !Number.isInteger(homologacionId) ||
+      homologacionId <= 0
+    ) {
 
-            data
+      return res.status(400).json({
 
-        });
+        ok: false,
+
+        message:
+          'El ID de la homologación no es válido.'
+
+      });
+
+    }
+
+
+    if (
+      !req.body ||
+      typeof req.body !== 'object'
+    ) {
+
+      return res.status(400).json({
+
+        ok: false,
+
+        message:
+          'No se recibieron los datos del pago.'
+
+      });
 
     }
 
-    catch(error){
 
-        res.status(500).json({
+    const data =
+      await service.registrarPago(
 
-            ok:false,
+        homologacionId,
 
-            message:error.message
+        req.body
 
-        });
+      );
+
+
+    return res.status(201).json({
+
+      ok: true,
+
+      message:
+        'Pago registrado correctamente.',
+
+      data
+
+    });
+
+  }
+  catch (error) {
+
+    console.error(
+      'Error registrando pago:',
+      error
+    );
+
+
+    const mensaje =
+      error.message ||
+      'Error al registrar el pago.';
+
+
+    let status = 400;
+
+
+    if (
+      mensaje ===
+      'Homologación no encontrada.'
+    ) {
+
+      status = 404;
 
     }
+
+
+    return res.status(status).json({
+
+      ok: false,
+
+      message: mensaje
+
+    });
+
+  }
 
 }
 
-async function actualizar(req,res){
 
-    try{
+// ============================================================
+// LISTAR PAGOS
+// GET /api/homologaciones/:id/pagos
+// ============================================================
 
-        const data=await service.actualizarEstado(
+async function listarPagos(req, res) {
 
-            req.params.id,
+  try {
 
-            req.body
+    const homologacionId =
+      Number(req.params.id);
 
-        );
 
-        res.json({
+    if (
+      !Number.isInteger(homologacionId) ||
+      homologacionId <= 0
+    ) {
 
-            ok:true,
+      return res.status(400).json({
 
-            data
+        ok: false,
 
-        });
+        message:
+          'El ID de la homologación no es válido.'
 
-    }
-
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
+      });
 
     }
 
-}
-async function eliminar(req,res){
 
-    try{
+    const data =
+      await service.listarPagos(
 
-        await service.eliminarHomologacion(
+        homologacionId
 
-            req.params.id
+      );
 
-        );
 
-        res.json({
+    return res.json({
 
-            ok:true,
+      ok: true,
 
-            message:"Registro eliminado."
+      data
 
-        });
+    });
 
-    }
+  }
+  catch (error) {
 
-    catch(error){
+    console.error(
+      'Error listando pagos:',
+      error
+    );
 
-        res.status(500).json({
 
-            ok:false,
+    return res.status(500).json({
 
-            message:error.message
+      ok: false,
 
-        });
+      message:
+        error.message ||
+        'Error al listar pagos.'
 
-    }
+    });
 
-}
-module.exports={
-
-    listar,
-
-    obtener,
-
-    crear,
-
-    actualizar,
-
-    eliminar
-
-};
-
-async function listar(req,res){
-
-    try{
-
-        const data=await service.listarHomologaciones();
-
-        res.json({
-
-            ok:true,
-
-            data
-
-        });
-
-    }
-
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
-
-    }
-
-}
-async function obtener(req,res){
-
-    try{
-
-        const data=await service.obtenerHomologacion(
-
-            req.params.id
-
-        );
-
-        res.json({
-
-            ok:true,
-
-            data
-
-        });
-
-    }
-
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
-
-    }
+  }
 
 }
 
-async function crear(req,res){
 
-    try{
+// ============================================================
+// ELIMINAR PAGO
+// DELETE /api/homologaciones/pagos/:pagoId
+// ============================================================
 
-        const data=await service.crearHomologacion(
+async function eliminarPago(req, res) {
 
-            req.body
+  try {
 
-        );
+    const pagoId =
+      Number(req.params.pagoId);
 
-        res.json({
 
-            ok:true,
+    if (
+      !Number.isInteger(pagoId) ||
+      pagoId <= 0
+    ) {
 
-            data
+      return res.status(400).json({
 
-        });
+        ok: false,
 
-    }
+        message:
+          'El ID del pago no es válido.'
 
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
+      });
 
     }
+
+
+    await service.eliminarPago(
+
+      pagoId
+
+    );
+
+
+    return res.json({
+
+      ok: true,
+
+      message:
+        'Pago eliminado correctamente.'
+
+    });
+
+  }
+  catch (error) {
+
+    console.error(
+      'Error eliminando pago:',
+      error
+    );
+
+
+    const status =
+      error.message ===
+      'Pago no encontrado.'
+        ? 404
+        : 400;
+
+
+    return res.status(status).json({
+
+      ok: false,
+
+      message:
+        error.message ||
+        'Error al eliminar pago.'
+
+    });
+
+  }
 
 }
 
-async function actualizar(req,res){
 
-    try{
+// ============================================================
+// EXPORTAR CONTROLLER
+// ============================================================
 
-        const data=await service.actualizarEstado(
+module.exports = {
 
-            req.params.id,
+  importarSheets,
 
-            req.body
+  listar,
 
-        );
+  obtener,
 
-        res.json({
+  actualizar,
 
-            ok:true,
+  registrarPago,
 
-            data
+  listarPagos,
 
-        });
-
-    }
-
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
-
-    }
-
-}
-async function eliminar(req,res){
-
-    try{
-
-        await service.eliminarHomologacion(
-
-            req.params.id
-
-        );
-
-        res.json({
-
-            ok:true,
-
-            message:"Registro eliminado."
-
-        });
-
-    }
-
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
-
-    }
-
-}
-module.exports={
-
-    listar,
-
-    obtener,
-
-    crear,
-
-    actualizar,
-
-    eliminar
-
-};
-async function listar(req,res){
-
-    try{
-
-        const data=await service.listarHomologaciones();
-
-        res.json({
-
-            ok:true,
-
-            data
-
-        });
-
-    }
-
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
-
-    }
-
-}
-async function obtener(req,res){
-
-    try{
-
-        const data=await service.obtenerHomologacion(
-
-            req.params.id
-
-        );
-
-        res.json({
-
-            ok:true,
-
-            data
-
-        });
-
-    }
-
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
-
-    }
-
-}
-
-async function crear(req,res){
-
-    try{
-
-        const data=await service.crearHomologacion(
-
-            req.body
-
-        );
-
-        res.json({
-
-            ok:true,
-
-            data
-
-        });
-
-    }
-
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
-
-    }
-
-}
-
-async function actualizar(req,res){
-
-    try{
-
-        const data=await service.actualizarEstado(
-
-            req.params.id,
-
-            req.body
-
-        );
-
-        res.json({
-
-            ok:true,
-
-            data
-
-        });
-
-    }
-
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
-
-    }
-
-}
-async function eliminar(req,res){
-
-    try{
-
-        await service.eliminarHomologacion(
-
-            req.params.id
-
-        );
-
-        res.json({
-
-            ok:true,
-
-            message:"Registro eliminado."
-
-        });
-
-    }
-
-    catch(error){
-
-        res.status(500).json({
-
-            ok:false,
-
-            message:error.message
-
-        });
-
-    }
-
-}
-module.exports={
-
-    importarSheets,
-
-    listar,
-
-    obtener,
-
-    crear,
-
-    actualizar,
-
-    eliminar
+  eliminarPago
 
 };
