@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 
 const controller =
-  require('../controllers/homologaciones-controller');
+  require('../controllers/homologaciones.controller');
 
 
 // ============================================================
