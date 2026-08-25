@@ -128,7 +128,7 @@ async function listarMatriculas(filtros = {}) {
 
         OR unaccent(
           lower(
-            a.nombres || ' ' || a.apellidos
+            a.apellidos || ' ' || a.nombres
           )
         ) LIKE unaccent(${param})
 
