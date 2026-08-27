@@ -400,8 +400,8 @@ async function listarResumenPagos() {
 
       a.dni,
 
-      a.nombres || ' ' ||
-      a.apellidos AS alumno,
+      a.apellidos || ' ' ||
+      a.nombres AS alumno,
 
       a.foto_url,
 
