@@ -35,23 +35,24 @@ async function listarAlumnos({ search = '', activos = true, anio = null, mes = n
   }
 
   const query = `
-    SELECT
-      id,
-      dni,
-      nombres,
-      apellidos,
-      fecha_nacimiento,
-      telefono,
-      correo,
-      direccion,
-      foto_url,
-      observaciones,
-      fecha_registro,
-      activo,
-      seguro_alumno,
-      anio_ingreso,
-      mes_ingreso
-    FROM alumnos
+  SELECT
+    id,
+    tipo_documento,
+    dni,
+    nombres,
+    apellidos,
+    fecha_nacimiento,
+    telefono,
+    correo,
+    direccion,
+    foto_url,
+    observaciones,
+    fecha_registro,
+    activo,
+    seguro_alumno,
+    anio_ingreso,
+    mes_ingreso
+  FROM alumnos  
     ${where}
     ORDER BY
       anio_ingreso DESC NULLS LAST,
@@ -81,6 +82,7 @@ async function obtenerAlumnoPorId(id) {
   const query = `
     SELECT
       id,
+      tipo_documento,
       dni,
       nombres,
       apellidos,
@@ -106,26 +108,28 @@ async function obtenerAlumnoPorId(id) {
 
 async function crearAlumno(data) {
   const query = `
-    INSERT INTO alumnos (
-      dni,
-      nombres,
-      apellidos,
-      fecha_nacimiento,
-      telefono,
-      correo,
-      direccion,
-      foto_url,
-      observaciones,
-      activo,
-      seguro_alumno,
-      anio_ingreso,
-      mes_ingreso
-    )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,TRUE,$10,$11,$12)
-    RETURNING *
+  INSERT INTO alumnos (
+    tipo_documento,
+    dni,
+    nombres,
+    apellidos,
+    fecha_nacimiento,
+    telefono,
+    correo,
+    direccion,
+    foto_url,
+    observaciones,
+    activo,
+    seguro_alumno,
+    anio_ingreso,
+    mes_ingreso
+  )
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE,$11,$12,$13)
+  RETURNING *
   `;
-
+  
   const values = [
+    data.tipo_documento || 'DNI',
     data.dni,
     data.nombres,
     data.apellidos,
@@ -135,9 +139,13 @@ async function crearAlumno(data) {
     data.direccion || null,
     data.foto_url || null,
     data.observaciones || null,
-    data.seguro_alumno ? String(data.seguro_alumno).trim().toUpperCase() : null,
+    data.seguro_alumno
+      ? String(data.seguro_alumno).trim().toUpperCase()
+      : null,
     data.anio_ingreso ? Number(data.anio_ingreso) : null,
-    data.mes_ingreso ? String(data.mes_ingreso).trim().toUpperCase() : null
+    data.mes_ingreso
+      ? String(data.mes_ingreso).trim().toUpperCase()
+      : null
   ];
 
   const result = await pool.query(query, values);
@@ -147,24 +155,26 @@ async function crearAlumno(data) {
 async function actualizarAlumno(id, data) {
   const query = `
     UPDATE alumnos
-    SET
-      dni = $1,
-      nombres = $2,
-      apellidos = $3,
-      fecha_nacimiento = $4,
-      telefono = $5,
-      correo = $6,
-      direccion = $7,
-      foto_url = $8,
-      observaciones = $9,
-      seguro_alumno = $10,
-      anio_ingreso = $11,
-      mes_ingreso = $12
-    WHERE id = $13
-    RETURNING *
+SET
+  tipo_documento = $1,
+  dni = $2,
+  nombres = $3,
+  apellidos = $4,
+  fecha_nacimiento = $5,
+  telefono = $6,
+  correo = $7,
+  direccion = $8,
+  foto_url = $9,
+  observaciones = $10,
+  seguro_alumno = $11,
+  anio_ingreso = $12,
+  mes_ingreso = $13
+WHERE id = $14
+RETURNING *
   `;
-
+  
   const values = [
+    data.tipo_documento || 'DNI',
     data.dni,
     data.nombres,
     data.apellidos,
@@ -174,7 +184,9 @@ async function actualizarAlumno(id, data) {
     data.direccion || null,
     data.foto_url || null,
     data.observaciones || null,
-    data.seguro_alumno ? String(data.seguro_alumno).trim().toUpperCase() : null,
+    data.seguro_alumno
+      ? String(data.seguro_alumno).trim().toUpperCase()
+      : null,
     data.anio_ingreso ? Number(data.anio_ingreso) : null,
     data.mes_ingreso ? String(data.mes_ingreso).trim().toUpperCase() : null,
     id
