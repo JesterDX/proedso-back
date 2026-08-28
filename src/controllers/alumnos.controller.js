@@ -2,11 +2,21 @@ const alumnosService = require('../services/alumnos.service');
 
 function validarAlumno(body) {
   const errores = [];
-
-  if (!body.dni || String(body.dni).trim() === '') {
-    errores.push('El DNI es obligatorio.');
+  
+  if (!body.tipo_documento) {
+    errores.push('El tipo de documento es obligatorio.');
   }
-
+  
+  if (!body.dni || String(body.dni).trim() === '') {
+    errores.push('El número de documento es obligatorio.');
+  }
+  
+  if (
+    body.tipo_documento &&
+    !['DNI', 'CE'].includes(String(body.tipo_documento).trim().toUpperCase())
+  ) {
+    errores.push('El tipo de documento debe ser DNI o CE.');
+  }
   if (!body.nombres || String(body.nombres).trim() === '') {
     errores.push('Los nombres son obligatorios.');
   }
