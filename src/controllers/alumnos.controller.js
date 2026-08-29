@@ -95,52 +95,60 @@ async function obtenerPorId(req, res) {
 }
 
 async function crear(req, res) {
-  try {
-    const errores = validarAlumno(req.body);
+try {
+const body = {
+...req.body,
 
-    tipo_documento: body.tipo_documento
-      ? String(body.tipo_documento).trim().toUpperCase()
-      : 'DNI'
+  // DNI será el valor por defecto
+  tipo_documento: req.body.tipo_documento
+    ? String(req.body.tipo_documento).trim().toUpperCase()
+    : 'DNI'
+};
 
-    if (errores.length > 0) {
-      return res.status(400).json({
-        ok: false,
-        message: 'Datos inválidos.',
-        errores
-      });
-    }
+const errores = validarAlumno(body);
 
-    let foto_url = null;
+if (errores.length > 0) {
+  return res.status(400).json({
+    ok: false,
+    message: 'Datos inválidos.',
+    errores
+  });
+}
 
-    if (req.file) {
-      foto_url = `/uploads/alumnos/${req.file.filename}`; // 👈 ERROR: Ruta local fija
-    }
-    const nuevo = await alumnosService.crearAlumno({
-      ...req.body,
-      foto_url
-    });
+let foto_url = null;
 
-  
-    res.status(201).json({
-      ok: true,
-      message: 'Alumno creado correctamente.',
-      data: nuevo
-    });
-  } catch (error) {
-    console.error('Error al crear alumno:', error);
+if (req.file) {
+  foto_url = `/uploads/alumnos/${req.file.filename}`;
+}
 
-    if (error.code === '23505') {
-      return res.status(409).json({
-        ok: false,
-        message: 'Ya existe un alumno con ese DNI.'
-      });
-    }
+const nuevo = await alumnosService.crearAlumno({
+  ...body,
+  foto_url
+});
 
-    res.status(500).json({
-      ok: false,
-      message: error.message || 'Error al crear alumno.'
-    });
-  }
+res.status(201).json({
+  ok: true,
+  message: 'Alumno creado correctamente.',
+  data: nuevo
+});
+
+} catch (error) {
+console.error('Error al crear alumno:', error);
+
+if (error.code === '23505') {
+  return res.status(409).json({
+    ok: false,
+    message: 'Ya existe un alumno con ese documento.'
+  });
+}
+
+res.status(500).json({
+  ok: false,
+  message: error.message || 'Error al crear alumno.'
+});
+
+
+}
 }
 
 async function actualizar(req, res) {
