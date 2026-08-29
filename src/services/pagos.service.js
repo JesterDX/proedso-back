@@ -251,7 +251,7 @@ async function listarPagos(filtros = {}) {
 
     where += `
       AND (
-        LOWER(COALESCE(a.dni, '')) LIKE $${values.length}
+        LOWER(COALESCE(a.numero_documento, '')) LIKE $${values.length}
 
         OR unaccent(
           LOWER(
@@ -297,7 +297,7 @@ async function listarPagos(filtros = {}) {
 
       a.id AS alumno_id,
 
-      a.dni,
+      a.numero_documento,
 
       a.nombres || ' ' ||
       a.apellidos AS alumno,
@@ -364,7 +364,7 @@ async function listarPagos(filtros = {}) {
       m.id,
 
       a.id,
-      a.dni,
+      a.numero_documento,
       a.nombres,
       a.apellidos,
       a.telefono,
@@ -398,7 +398,7 @@ async function listarResumenPagos() {
 
       a.id AS alumno_id,
 
-      a.dni,
+      a.numero_documento,
 
       a.apellidos || ' ' ||
       a.nombres AS alumno,
@@ -480,7 +480,7 @@ async function listarResumenPagos() {
 
       m.id,
       a.id,
-      a.dni,
+      a.numero_documento,
       a.nombres,
       a.apellidos,
       a.foto_url,
@@ -822,7 +822,7 @@ async function buscarMatriculasParaPago(search = '') {
 
       a.id AS alumno_id,
 
-      a.dni,
+      a.numero_documento,
 
       a.nombres,
 
@@ -868,7 +868,7 @@ async function buscarMatriculasParaPago(search = '') {
         $1 = ''
 
         OR LOWER(
-          COALESCE(a.dni, '')
+          COALESCE(a.numero_documento, '')
         ) LIKE LOWER($2)
 
         OR unaccent(
@@ -886,7 +886,7 @@ async function buscarMatriculasParaPago(search = '') {
 
       a.id,
 
-      a.dni,
+      a.numero_documento,
 
       a.nombres,
 
