@@ -61,7 +61,7 @@ async function obtenerNotificacionesPagos() {
 
         m.fecha_fin_estimada,
 
-        a.dni,
+        a.numero_documento,
 
         a.nombres,
 
