@@ -1,3 +1,4 @@
+
 const axios = require('axios');
 const { parse } = require('csv-parse/sync');
 const pool = require('../config/db');
@@ -12,65 +13,350 @@ const SHEETS_URL =
 
 
 // ============================================================
+// UTILIDADES
+// ============================================================
+
+/**
+ * Convierte valores provenientes de Google Sheets
+ * a número de forma segura.
+ *
+ * Soporta:
+ *
+ * 199
+ * "199"
+ * "199.00"
+ * "199,00"
+ * "S/ 199.00"
+ * "S/ 199,00"
+ */
+function convertirNumero(valor) {
+
+  if (
+    valor === undefined ||
+    valor === null ||
+    valor === ''
+  ) {
+
+    return 0;
+
+  }
+
+
+  let texto =
+    String(valor)
+      .trim();
+
+
+  if (!texto) {
+
+    return 0;
+
+  }
+
+
+  // Eliminar moneda y espacios
+  texto =
+    texto
+      .replace(/S\/?/gi, '')
+      .replace(/\s/g, '');
+
+
+  /*
+   * Si tiene punto y coma decimal:
+   *
+   * 1.234,56
+   *
+   * se convierte a:
+   *
+   * 1234.56
+   */
+
+  if (
+    texto.includes('.') &&
+    texto.includes(',')
+  ) {
+
+    texto =
+      texto
+        .replace(/\./g, '')
+        .replace(',', '.');
+
+  }
+
+  /*
+   * Si solamente tiene coma:
+   *
+   * 199,00
+   *
+   * -> 199.00
+   */
+
+  else if (
+    texto.includes(',')
+  ) {
+
+    texto =
+      texto.replace(',', '.');
+
+  }
+
+
+  const numero =
+    Number(texto);
+
+
+  return Number.isFinite(numero)
+    ? numero
+    : 0;
+
+}
+
+
+/**
+ * Normaliza texto.
+ */
+function textoSeguro(valor) {
+
+  if (
+    valor === undefined ||
+    valor === null
+  ) {
+
+    return '';
+
+  }
+
+
+  return String(valor).trim();
+
+}
+
+
+/**
+ * Convierte una fecha de Google Sheets / Excel
+ * a formato YYYY-MM-DD.
+ */
+function convertirFecha(valor) {
+
+  const texto =
+    textoSeguro(valor);
+
+
+  if (!texto) {
+
+    return null;
+
+  }
+
+
+  // ==========================================================
+  // FORMATO DD/MM/YYYY
+  // ==========================================================
+
+  if (
+    texto.includes('/')
+  ) {
+
+    const partes =
+      texto.split('/');
+
+
+    if (
+      partes.length === 3
+    ) {
+
+      let dia =
+        partes[0].trim();
+
+      let mes =
+        partes[1].trim();
+
+      let anio =
+        partes[2].trim();
+
+
+      /*
+       * En caso de año de dos dígitos.
+       */
+      if (
+        anio.length === 2
+      ) {
+
+        anio =
+          `20${anio}`;
+
+      }
+
+
+      dia =
+        dia.padStart(2, '0');
+
+      mes =
+        mes.padStart(2, '0');
+
+
+      return `${anio}-${mes}-${dia}`;
+
+    }
+
+  }
+
+
+  // ==========================================================
+  // FECHA SERIAL DE EXCEL
+  // ==========================================================
+
+  if (
+    !isNaN(
+      Number(texto)
+    )
+  ) {
+
+    const excelDate =
+      Number(texto);
+
+
+    /*
+     * Evitamos interpretar números pequeños
+     * como fechas por accidente.
+     */
+    if (
+      excelDate > 1000
+    ) {
+
+      const ms =
+        (
+          excelDate -
+          25569
+        ) *
+        86400 *
+        1000;
+
+
+      const date =
+        new Date(ms);
+
+
+      if (
+        !isNaN(
+          date.getTime()
+        )
+      ) {
+
+        return `${date.getUTCFullYear()}-${
+          String(
+            date.getUTCMonth() + 1
+          ).padStart(2, '0')
+        }-${
+          String(
+            date.getUTCDate()
+          ).padStart(2, '0')
+        }`;
+
+      }
+
+    }
+
+  }
+
+
+  // ==========================================================
+  // YYYY-MM-DD
+  // ==========================================================
+
+  if (
+    /^\d{4}-\d{2}-\d{2}/.test(texto)
+  ) {
+
+    return texto.substring(
+      0,
+      10
+    );
+
+  }
+
+
+  return null;
+
+}
+
+
+// ============================================================
 // LISTAR HOMOLOGACIONES
 // ============================================================
 
 async function listarHomologaciones() {
 
-  const result = await pool.query(`
-    SELECT
-      h.id,
-      h.google_id,
+  const result =
+    await pool.query(`
+      SELECT
 
-      h.fecha_registro,
+        h.id,
 
-      h.alumno,
-      h.alumno_id,
+        h.google_id,
 
-      h.tipo_homologacion,
-      h.curso_equipo,
+        h.fecha_registro,
 
-      h.dni,
-      h.celular,
-      h.vendedor,
+        h.alumno,
 
-      h.monto_total,
-      h.monto_pagado,
-      h.monto_indicado,
-      h.saldo_pendiente,
+        h.alumno_id,
 
-      h.estado_pago,
-      h.estado_documento,
+        h.tipo_homologacion,
 
-      h.fecha_envio,
+        h.curso_equipo,
 
-      h.estado,
+        h.dni,
 
-      h.observaciones,
-      h.observaciones_admin,
+        h.celular,
 
-      (
-        SELECT COUNT(*)
-        FROM homologacion_pagos hp
-        WHERE hp.homologacion_id = h.id
-      ) AS cantidad_pagos,
+        h.vendedor,
 
-      EXISTS (
-        SELECT 1
-        FROM homologacion_pagos hp
-        WHERE
-          hp.homologacion_id = h.id
-          AND hp.boleta_generada = TRUE
-      ) AS tiene_boleta
+        h.monto_total,
 
-    FROM homologaciones h
+        h.monto_pagado,
 
-    ORDER BY
-      h.fecha_registro DESC,
-      h.id DESC
-  `);
+        h.monto_indicado,
+
+        h.saldo_pendiente,
+
+        h.estado_pago,
+
+        h.estado_documento,
+
+        h.fecha_envio,
+
+        h.estado,
+
+        h.observaciones,
+
+        h.observaciones_admin,
+
+        (
+          SELECT
+            COUNT(*)
+          FROM homologacion_pagos hp
+          WHERE
+            hp.homologacion_id = h.id
+        ) AS cantidad_pagos,
+
+        EXISTS (
+          SELECT 1
+          FROM homologacion_pagos hp
+          WHERE
+            hp.homologacion_id = h.id
+            AND hp.boleta_generada = TRUE
+        ) AS tiene_boleta
+
+      FROM homologaciones h
+
+      ORDER BY
+        h.fecha_registro DESC,
+        h.id DESC
+    `);
+
 
   return result.rows;
+
 }
 
 
@@ -78,21 +364,36 @@ async function listarHomologaciones() {
 // OBTENER HOMOLOGACIÓN
 // ============================================================
 
-async function obtenerHomologacion(id) {
+async function obtenerHomologacion(
+  id
+) {
 
-  const result = await pool.query(`
-    SELECT
-      h.*
-    FROM homologaciones h
-    WHERE h.id = $1
-    LIMIT 1
-  `, [id]);
+  const result =
+    await pool.query(`
+      SELECT
+        h.*
+      FROM homologaciones h
+      WHERE
+        h.id = $1
+      LIMIT 1
+    `, [
+      id
+    ]);
 
-  if (!result.rows.length) {
-    throw new Error('Homologación no encontrada.');
+
+  if (
+    !result.rows.length
+  ) {
+
+    throw new Error(
+      'Homologación no encontrada.'
+    );
+
   }
 
+
   return result.rows[0];
+
 }
 
 
@@ -100,27 +401,50 @@ async function obtenerHomologacion(id) {
 // ACTUALIZAR HOMOLOGACIÓN
 // ============================================================
 
-async function actualizarHomologacion(id, data) {
+async function actualizarHomologacion(
+  id,
+  data
+) {
 
-  const client = await pool.connect();
+  const client =
+    await pool.connect();
+
 
   try {
 
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
-    const actualResult = await client.query(`
-      SELECT *
-      FROM homologaciones
-      WHERE id = $1
-      FOR UPDATE
-    `, [id]);
 
-    if (!actualResult.rows.length) {
-      throw new Error('Homologación no encontrada.');
+    // ========================================================
+    // OBTENER ACTUAL
+    // ========================================================
+
+    const actualResult =
+      await client.query(`
+        SELECT *
+        FROM homologaciones
+        WHERE id = $1
+        FOR UPDATE
+      `, [
+        id
+      ]);
+
+
+    if (
+      !actualResult.rows.length
+    ) {
+
+      throw new Error(
+        'Homologación no encontrada.'
+      );
+
     }
 
 
-    const actual = actualResult.rows[0];
+    const actual =
+      actualResult.rows[0];
 
 
     // ========================================================
@@ -129,43 +453,51 @@ async function actualizarHomologacion(id, data) {
 
     const alumno =
       data.alumno !== undefined
-        ? String(data.alumno).trim()
+        ? textoSeguro(data.alumno)
         : actual.alumno;
+
 
     const dni =
       data.dni !== undefined
-        ? String(data.dni).trim()
+        ? textoSeguro(data.dni)
         : actual.dni;
+
 
     const celular =
       data.celular !== undefined
-        ? String(data.celular).trim()
+        ? textoSeguro(data.celular)
         : actual.celular;
+
 
     const curso =
       data.curso_equipo !== undefined
-        ? String(data.curso_equipo).trim()
+        ? textoSeguro(data.curso_equipo)
         : actual.curso_equipo;
+
 
     const vendedor =
       data.vendedor !== undefined
-        ? String(data.vendedor).trim()
+        ? textoSeguro(data.vendedor)
         : actual.vendedor;
+
 
     const estado =
       data.estado !== undefined
-        ? String(data.estado).trim()
+        ? textoSeguro(data.estado)
         : actual.estado;
+
 
     const estadoDocumento =
       data.estado_documento !== undefined
-        ? String(data.estado_documento).trim()
+        ? textoSeguro(data.estado_documento)
         : actual.estado_documento;
+
 
     const observaciones =
       data.observaciones !== undefined
         ? data.observaciones
         : actual.observaciones;
+
 
     const observacionesAdmin =
       data.observaciones_admin !== undefined
@@ -179,6 +511,7 @@ async function actualizarHomologacion(id, data) {
 
     let fechaRegistro =
       actual.fecha_registro;
+
 
     if (
       data.fecha_registro !== undefined &&
@@ -199,6 +532,7 @@ async function actualizarHomologacion(id, data) {
     let montoTotal =
       actual.monto_total;
 
+
     if (
       data.monto_total !== undefined &&
       data.monto_total !== null &&
@@ -206,13 +540,15 @@ async function actualizarHomologacion(id, data) {
     ) {
 
       montoTotal =
-        Number(data.monto_total);
+        convertirNumero(
+          data.monto_total
+        );
 
     }
 
 
     if (
-      Number.isNaN(
+      !Number.isFinite(
         Number(montoTotal)
       )
     ) {
@@ -236,11 +572,10 @@ async function actualizarHomologacion(id, data) {
 
 
     // ========================================================
-    // IMPORTANTE
+    // PAGOS REALES
     //
-    // EL PAGADO NO SE RECIBE DEL FRONTEND.
-    //
-    // SE CALCULA DESDE homologacion_pagos.
+    // El monto pagado siempre se obtiene
+    // de homologacion_pagos.
     // ========================================================
 
     const pagosResult =
@@ -250,9 +585,14 @@ async function actualizarHomologacion(id, data) {
             SUM(monto),
             0
           ) AS total_pagado
+
         FROM homologacion_pagos
-        WHERE homologacion_id = $1
-      `, [id]);
+
+        WHERE
+          homologacion_id = $1
+      `, [
+        id
+      ]);
 
 
     const montoPagado =
@@ -260,6 +600,10 @@ async function actualizarHomologacion(id, data) {
         pagosResult.rows[0].total_pagado
       );
 
+
+    // ========================================================
+    // SALDO
+    // ========================================================
 
     const saldo =
       Math.max(
@@ -270,26 +614,35 @@ async function actualizarHomologacion(id, data) {
 
 
     // ========================================================
-    // ESTADO DE PAGO AUTOMÁTICO
+    // ESTADO DE PAGO
     // ========================================================
 
     let estadoPago;
 
-    if (montoPagado <= 0) {
 
-      estadoPago = 'PENDIENTE';
-
-    }
-    else if (
-      montoPagado < Number(montoTotal)
+    if (
+      montoPagado <= 0
     ) {
 
-      estadoPago = 'PARCIAL';
+      estadoPago =
+        'PENDIENTE';
 
     }
+
+    else if (
+      montoPagado <
+      Number(montoTotal)
+    ) {
+
+      estadoPago =
+        'PARCIAL';
+
+    }
+
     else {
 
-      estadoPago = 'PAGADO';
+      estadoPago =
+        'PAGADO';
 
     }
 
@@ -331,7 +684,8 @@ async function actualizarHomologacion(id, data) {
 
           observaciones_admin = $14
 
-        WHERE id = $15
+        WHERE
+          id = $15
 
         RETURNING *
       `, [
@@ -369,18 +723,25 @@ async function actualizarHomologacion(id, data) {
       ]);
 
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
+
 
     return result.rows[0];
 
   }
+
   catch (error) {
 
-    await client.query('ROLLBACK');
+    await client.query(
+      'ROLLBACK'
+    );
 
     throw error;
 
   }
+
   finally {
 
     client.release();
@@ -402,9 +763,12 @@ async function registrarPago(
   const client =
     await pool.connect();
 
+
   try {
 
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
 
     // ========================================================
@@ -417,10 +781,14 @@ async function registrarPago(
         FROM homologaciones
         WHERE id = $1
         FOR UPDATE
-      `, [homologacionId]);
+      `, [
+        homologacionId
+      ]);
 
 
-    if (!homologacionResult.rows.length) {
+    if (
+      !homologacionResult.rows.length
+    ) {
 
       throw new Error(
         'Homologación no encontrada.'
@@ -438,7 +806,9 @@ async function registrarPago(
     // ========================================================
 
     const monto =
-      Number(data.monto);
+      convertirNumero(
+        data.monto
+      );
 
 
     if (
@@ -464,9 +834,14 @@ async function registrarPago(
             SUM(monto),
             0
           ) AS total_pagado
+
         FROM homologacion_pagos
-        WHERE homologacion_id = $1
-      `, [homologacionId]);
+
+        WHERE
+          homologacion_id = $1
+      `, [
+        homologacionId
+      ]);
 
 
     const pagadoActual =
@@ -492,7 +867,9 @@ async function registrarPago(
     // VALIDAR EXCESO
     // ========================================================
 
-    if (monto > saldoActual) {
+    if (
+      monto > saldoActual
+    ) {
 
       throw new Error(
         `El pago supera el saldo pendiente de S/ ${saldoActual.toFixed(2)}.`
@@ -511,9 +888,14 @@ async function registrarPago(
       );
 
 
+    // ========================================================
+    // INSERTAR PAGO
+    // ========================================================
+
     const pagoResult =
       await client.query(`
         INSERT INTO homologacion_pagos (
+
           homologacion_id,
 
           monto,
@@ -537,7 +919,9 @@ async function registrarPago(
           boleta_pdf_url
 
         )
+
         VALUES (
+
           $1,
           $2,
           $3,
@@ -549,7 +933,9 @@ async function registrarPago(
           $9,
           $10,
           $11
+
         )
+
         RETURNING *
       `, [
 
@@ -606,6 +992,7 @@ async function registrarPago(
 
     let nuevoEstadoPago;
 
+
     if (
       nuevoPagado <= 0
     ) {
@@ -614,6 +1001,7 @@ async function registrarPago(
         'PENDIENTE';
 
     }
+
     else if (
       nuevoPagado < total
     ) {
@@ -622,6 +1010,7 @@ async function registrarPago(
         'PARCIAL';
 
     }
+
     else {
 
       nuevoEstadoPago =
@@ -631,7 +1020,7 @@ async function registrarPago(
 
 
     // ========================================================
-    // ACTUALIZAR HOMOLOGACIÓN
+    // ACTUALIZAR TOTALES
     // ========================================================
 
     const homologacionActualizada =
@@ -645,7 +1034,8 @@ async function registrarPago(
 
           estado_pago = $3
 
-        WHERE id = $4
+        WHERE
+          id = $4
 
         RETURNING *
       `, [
@@ -661,7 +1051,9 @@ async function registrarPago(
       ]);
 
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
 
 
     return {
@@ -675,6 +1067,7 @@ async function registrarPago(
     };
 
   }
+
   catch (error) {
 
     await client.query(
@@ -684,6 +1077,7 @@ async function registrarPago(
     throw error;
 
   }
+
   finally {
 
     client.release();
@@ -714,7 +1108,9 @@ async function listarPagos(
       ORDER BY
         hp.fecha_pago DESC,
         hp.id DESC
-    `, [homologacionId]);
+    `, [
+      homologacionId
+    ]);
 
 
   return result.rows;
@@ -733,10 +1129,17 @@ async function eliminarPago(
   const client =
     await pool.connect();
 
+
   try {
 
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
+
+    // ========================================================
+    // OBTENER PAGO
+    // ========================================================
 
     const pagoResult =
       await client.query(`
@@ -744,10 +1147,14 @@ async function eliminarPago(
         FROM homologacion_pagos
         WHERE id = $1
         FOR UPDATE
-      `, [pagoId]);
+      `, [
+        pagoId
+      ]);
 
 
-    if (!pagoResult.rows.length) {
+    if (
+      !pagoResult.rows.length
+    ) {
 
       throw new Error(
         'Pago no encontrado.'
@@ -760,15 +1167,26 @@ async function eliminarPago(
       pagoResult.rows[0];
 
 
+    // ========================================================
+    // ELIMINAR
+    // ========================================================
+
     await client.query(`
       DELETE FROM homologacion_pagos
       WHERE id = $1
-    `, [pagoId]);
+    `, [
+      pagoId
+    ]);
 
+
+    // ========================================================
+    // RECALCULAR
+    // ========================================================
 
     const totales =
       await client.query(`
         SELECT
+
           h.monto_total,
 
           COALESCE(
@@ -779,12 +1197,17 @@ async function eliminarPago(
         FROM homologaciones h
 
         LEFT JOIN homologacion_pagos hp
-          ON hp.homologacion_id = h.id
+          ON hp.homologacion_id =
+             h.id
 
-        WHERE h.id = $1
+        WHERE
+          h.id = $1
 
-        GROUP BY h.id
-      `, [pago.homologacion_id]);
+        GROUP BY
+          h.id
+      `, [
+        pago.homologacion_id
+      ]);
 
 
     const total =
@@ -808,18 +1231,25 @@ async function eliminarPago(
 
     let estadoPago;
 
-    if (pagado <= 0) {
+
+    if (
+      pagado <= 0
+    ) {
 
       estadoPago =
         'PENDIENTE';
 
     }
-    else if (pagado < total) {
+
+    else if (
+      pagado < total
+    ) {
 
       estadoPago =
         'PARCIAL';
 
     }
+
     else {
 
       estadoPago =
@@ -827,6 +1257,10 @@ async function eliminarPago(
 
     }
 
+
+    // ========================================================
+    // ACTUALIZAR HOMOLOGACIÓN
+    // ========================================================
 
     await client.query(`
       UPDATE homologaciones
@@ -838,7 +1272,8 @@ async function eliminarPago(
 
         estado_pago = $3
 
-      WHERE id = $4
+      WHERE
+        id = $4
     `, [
 
       pagado,
@@ -862,6 +1297,7 @@ async function eliminarPago(
     };
 
   }
+
   catch (error) {
 
     await client.query(
@@ -871,6 +1307,7 @@ async function eliminarPago(
     throw error;
 
   }
+
   finally {
 
     client.release();
@@ -881,18 +1318,50 @@ async function eliminarPago(
 
 
 // ============================================================
-// IMPORTAR DESDE SHEETS
+// IMPORTAR DESDE GOOGLE SHEETS
+//
+// REGLA:
+//
+// 1. Si google_id NO existe:
+//      INSERTAR.
+//
+// 2. Si google_id YA existe:
+//      NO MODIFICAR ABSOLUTAMENTE NADA.
+//
+// Esto evita perder datos que hayan sido llenados
+// posteriormente desde el sistema.
+//
+// Además:
+//
+// MONTO INDICADO
+//      -> monto_total
+//
+// MONTO CANCELADO
+//      -> pago inicial en homologacion_pagos
+//
+// SALDO PENDIENTE
+//      -> se calcula desde los pagos.
+//
+// ESTADO DE PAGO
+//      -> se calcula desde los pagos.
 // ============================================================
 
 async function importarDesdeSheets() {
 
   let creados = 0;
-  let actualizados = 0;
+
   let omitidos = 0;
 
+  let pagosIniciales = 0;
+
   const errores = [];
+
   const omitidosDetalle = [];
 
+
+  // ==========================================================
+  // DESCARGAR SHEETS
+  // ==========================================================
 
   const respuesta =
     await axios.get(
@@ -900,19 +1369,49 @@ async function importarDesdeSheets() {
     );
 
 
+  // ==========================================================
+  // PARSEAR CSV
+  // ==========================================================
+
   const filas =
     parse(
       respuesta.data,
       {
         columns: true,
-        skip_empty_lines: true
+        skip_empty_lines: true,
+        bom: true,
+        relax_column_count: true
       }
     );
 
 
-  for (const row of filas) {
+  console.log(
+    `Google Sheets: ${filas.length} filas encontradas.`
+  );
+
+
+  // ==========================================================
+  // RECORRER FILAS
+  // ==========================================================
+
+  for (
+    const row of filas
+  ) {
+
+    const client =
+      await pool.connect();
+
 
     try {
+
+      await client.query(
+        'BEGIN'
+      );
+
+
+      // ======================================================
+      // ID DE GOOGLE SHEETS
+      // ======================================================
 
       const googleId =
         Number(
@@ -920,33 +1419,43 @@ async function importarDesdeSheets() {
         );
 
 
+      // ======================================================
+      // DATOS BÁSICOS
+      // ======================================================
+
       const dni =
-        String(
-          row["DNI"] ?? ""
-        ).trim();
+        textoSeguro(
+          row["DNI"]
+        );
 
 
       const alumno =
-        String(
-          row["APELLIDOS Y NOMBRES"] ?? ""
-        ).trim();
+        textoSeguro(
+          row["APELLIDOS Y NOMBRES"]
+        );
 
 
       const curso =
-        String(
-          row["Curso/ Equipos "] ??
+        textoSeguro(
           row["Curso/ Equipos"] ??
+          row["Curso/ Equipos "] ??
           ""
-        ).trim();
+        );
 
+
+      // ======================================================
+      // VALIDACIÓN MÍNIMA
+      // ======================================================
 
       if (
-        !googleId ||
+        !Number.isFinite(googleId) ||
+        googleId <= 0 ||
         !dni ||
         !curso
       ) {
 
         omitidos++;
+
 
         omitidosDetalle.push({
 
@@ -957,9 +1466,76 @@ async function importarDesdeSheets() {
           curso,
 
           motivo:
-            "ID, DNI o Curso vacío"
+            'ID, DNI o Curso vacío o inválido.'
 
         });
+
+
+        await client.query(
+          'ROLLBACK'
+        );
+
+
+        continue;
+
+      }
+
+
+      // ======================================================
+      // VERIFICAR SI YA EXISTE
+      //
+      // MUY IMPORTANTE:
+      //
+      // Se bloquea el registro si existe.
+      // ======================================================
+
+      const existe =
+        await client.query(`
+          SELECT
+            id
+          FROM homologaciones
+          WHERE
+            google_id = $1
+          FOR UPDATE
+        `, [
+          googleId
+        ]);
+
+
+      // ======================================================
+      // SI EXISTE
+      //
+      // NO SE TOCA.
+      // ======================================================
+
+      if (
+        existe.rows.length > 0
+      ) {
+
+        omitidos++;
+
+
+        omitidosDetalle.push({
+
+          googleId,
+
+          dni,
+
+          curso,
+
+          homologacionId:
+            existe.rows[0].id,
+
+          motivo:
+            'El registro ya existe. No se modificó ningún dato.'
+
+        });
+
+
+        await client.query(
+          'COMMIT'
+        );
+
 
         continue;
 
@@ -970,318 +1546,256 @@ async function importarDesdeSheets() {
       // FECHA
       // ======================================================
 
-      let fechaRegistro = null;
-
-
-      const fechaTexto =
-        String(
+      const fechaRegistro =
+        convertirFecha(
           row["FECHA "] ??
-          row["FECHA"] ??
-          ""
-        ).trim();
-
-
-      if (fechaTexto) {
-
-        if (
-          fechaTexto.includes("/")
-        ) {
-
-          const partes =
-            fechaTexto.split("/");
-
-
-          if (
-            partes.length === 3
-          ) {
-
-            fechaRegistro =
-              `${partes[2]}-${partes[1]}-${partes[0]}`;
-
-          }
-
-        }
-        else if (
-          !isNaN(
-            Number(fechaTexto)
-          )
-        ) {
-
-          const excelDate =
-            Number(fechaTexto);
-
-
-          const ms =
-            (
-              excelDate -
-              25569
-            ) *
-            86400 *
-            1000;
-
-
-          const date =
-            new Date(ms);
-
-
-          fechaRegistro =
-            `${date.getUTCFullYear()}-${
-              String(
-                date.getUTCMonth() + 1
-              ).padStart(2, "0")
-            }-${
-              String(
-                date.getUTCDate()
-              ).padStart(2, "0")
-            }`;
-
-        }
-
-      }
+          row["FECHA"]
+        );
 
 
       // ======================================================
-      // MONTO
+      // MONTO INDICADO
+      //
+      // Este será el monto total.
       // ======================================================
 
       const montoIndicado =
-        Number(
-          String(
-            row["MONTO INDICADO"] ?? "0"
-          )
-            .replace(/\./g, "")
-            .replace(",", ".")
-        ) || 0;
+        convertirNumero(
+          row["MONTO INDICADO"]
+        );
 
 
       // ======================================================
-      // BUSCAR
+      // MONTO CANCELADO
+      //
+      // Este será el pago inicial.
       // ======================================================
 
-      const existe =
-        await pool.query(`
-          SELECT id
-          FROM homologaciones
-          WHERE google_id = $1
-        `, [googleId]);
+      let montoCancelado =
+        convertirNumero(
+          row["MONTO CANCELADO"]
+        );
+
+
+      // ======================================================
+      // VALIDAR MONTOS
+      // ======================================================
+
+      if (
+        montoIndicado < 0
+      ) {
+
+        throw new Error(
+          'MONTO INDICADO no puede ser negativo.'
+        );
+
+      }
 
 
       if (
-        existe.rows.length > 0
+        montoCancelado < 0
       ) {
 
-        // ====================================================
-        // IMPORTANTE
-        //
-        // NO TOCAMOS:
-        //
-        // monto_pagado
-        // saldo_pendiente
-        // estado_pago
-        //
-        // porque ahora vienen de los pagos reales.
-        // ====================================================
-
-        await pool.query(`
-          UPDATE homologaciones
-          SET
-
-            alumno = $1,
-
-            fecha_registro = $2,
-
-            vendedor = $3,
-
-            celular = $4,
-
-            monto_total = $5,
-
-            monto_indicado = $6,
-
-            estado_documento = $7,
-
-            observaciones = $8,
-
-            observaciones_admin = $9,
-
-            dni = $10,
-
-            curso_equipo = $11
-
-          WHERE google_id = $12
-        `, [
-
-          alumno,
-
-          fechaRegistro,
-
-          row["Vendedor"] || "",
-
-          row["CELULAR"] || "",
-
-          montoIndicado,
-
-          montoIndicado,
-
-          row["ESTADO DEL DOCUMENTO"] || "",
-
-          row["OBSERVACIONES"] || "",
-
-          row["OBSERVACIONES ADMIN"] || "",
-
-          dni,
-
-          curso,
-
-          googleId
-
-        ]);
-
-
-        // ====================================================
-        // RECALCULAR SALDO SEGÚN PAGOS
-        // ====================================================
-
-        const homologacion =
-          await pool.query(`
-            SELECT
-              id,
-              monto_total
-            FROM homologaciones
-            WHERE google_id = $1
-          `, [googleId]);
-
-
-        const homologacionId =
-          homologacion.rows[0].id;
-
-
-        const pagos =
-          await pool.query(`
-            SELECT
-              COALESCE(
-                SUM(monto),
-                0
-              ) AS pagado
-            FROM homologacion_pagos
-            WHERE homologacion_id = $1
-          `, [homologacionId]);
-
-
-        const pagado =
-          Number(
-            pagos.rows[0].pagado
-          );
-
-
-        const total =
-          Number(
-            montoIndicado
-          );
-
-
-        const saldo =
-          Math.max(
-            0,
-            total - pagado
-          );
-
-
-        let estadoPago;
-
-        if (pagado <= 0) {
-
-          estadoPago = 'PENDIENTE';
-
-        }
-        else if (pagado < total) {
-
-          estadoPago = 'PARCIAL';
-
-        }
-        else {
-
-          estadoPago = 'PAGADO';
-
-        }
-
-
-        await pool.query(`
-          UPDATE homologaciones
-          SET
-
-            monto_pagado = $1,
-
-            saldo_pendiente = $2,
-
-            estado_pago = $3
-
-          WHERE id = $4
-        `, [
-
-          pagado,
-
-          saldo,
-
-          estadoPago,
-
-          homologacionId
-
-        ]);
-
-
-        actualizados++;
+        montoCancelado = 0;
 
       }
+
+
+      /*
+       * Nunca permitimos que el pago inicial
+       * sea superior al monto total.
+       */
+
+      if (
+        montoCancelado >
+        montoIndicado
+      ) {
+
+        console.warn(
+          `Google ID ${googleId}: ` +
+          `MONTO CANCELADO (${montoCancelado}) ` +
+          `supera MONTO INDICADO (${montoIndicado}). ` +
+          `Se ajustará al total.`
+        );
+
+
+        montoCancelado =
+          montoIndicado;
+
+      }
+
+
+      // ======================================================
+      // DATOS RESTANTES
+      // ======================================================
+
+      const celular =
+        textoSeguro(
+          row["CELULAR"]
+        );
+
+
+      const vendedor =
+        textoSeguro(
+          row["Vendedor"]
+        );
+
+
+      const observaciones =
+        textoSeguro(
+          row["OBSERVACIONES"]
+        );
+
+
+      const estadoDocumento =
+        textoSeguro(
+          row["ESTADO DEL DOCUMENTO"]
+        );
+
+
+      const observacionesAdmin =
+        textoSeguro(
+          row["OBSERVACIONES ADMIN"]
+        );
+
+
+      // ======================================================
+      // CALCULAR TOTALES INICIALES
+      // ======================================================
+
+      const montoPagadoInicial =
+        montoCancelado;
+
+
+      const saldoInicial =
+        Math.max(
+          0,
+          montoIndicado -
+          montoPagadoInicial
+        );
+
+
+      let estadoPagoInicial;
+
+
+      if (
+        montoPagadoInicial <= 0
+      ) {
+
+        estadoPagoInicial =
+          'PENDIENTE';
+
+      }
+
+      else if (
+        montoPagadoInicial <
+        montoIndicado
+      ) {
+
+        estadoPagoInicial =
+          'PARCIAL';
+
+      }
+
       else {
 
-        // ====================================================
-        // NUEVO
-        // ====================================================
+        estadoPagoInicial =
+          'PAGADO';
 
-        await pool.query(`
+      }
+
+
+      // ======================================================
+      // INSERTAR HOMOLOGACIÓN
+      // ======================================================
+
+      const homologacionResult =
+        await client.query(`
           INSERT INTO homologaciones (
+
             google_id,
+
             alumno,
+
             alumno_id,
+
             tipo_homologacion,
+
             monto_total,
+
             monto_pagado,
+
             fecha_registro,
+
             estado,
+
             observaciones,
+
             dni,
+
             celular,
+
             vendedor,
+
             curso_equipo,
+
             monto_indicado,
+
             saldo_pendiente,
+
             estado_pago,
+
             estado_documento,
+
             fecha_envio,
+
             observaciones_admin
+
           )
+
           VALUES (
+
             $1,
+
             $2,
+
             NULL,
+
             'INDIVIDUAL',
+
             $3,
-            0,
+
             $4,
-            'REGISTRADO',
+
             $5,
+
+            'REGISTRADO',
+
             $6,
+
             $7,
+
             $8,
+
             $9,
+
             $10,
-            $3,
-            'PENDIENTE',
+
             $11,
+
+            $12,
+
+            $13,
+
+            $14,
+
             NULL,
-            $12
+
+            $15
+
           )
+
+          RETURNING id
         `, [
 
           googleId,
@@ -1290,33 +1804,168 @@ async function importarDesdeSheets() {
 
           montoIndicado,
 
+          montoPagadoInicial,
           fechaRegistro,
 
-          row["OBSERVACIONES"] || "",
+          observaciones,
 
           dni,
 
-          row["CELULAR"] || "",
+          celular,
 
-          row["Vendedor"] || "",
+          vendedor,
 
           curso,
 
           montoIndicado,
 
-          row["ESTADO DEL DOCUMENTO"] || "",
+          saldoInicial,
 
-          row["OBSERVACIONES ADMIN"] || ""
+          estadoPagoInicial,
+
+          estadoDocumento,
+
+          observacionesAdmin
 
         ]);
 
 
-        creados++;
+      const homologacionId =
+        homologacionResult.rows[0].id;
+
+
+      // ======================================================
+      // REGISTRAR PAGO INICIAL
+      //
+      // SOLO SI SHEETS TIENE MONTO CANCELADO > 0.
+      //
+      // Este registro permite que posteriormente:
+      //
+      // SUM(homologacion_pagos.monto)
+      //
+      // siga siendo la fuente real del monto pagado.
+      // ======================================================
+
+      if (
+        montoCancelado > 0
+      ) {
+
+        await client.query(`
+          INSERT INTO homologacion_pagos (
+
+            homologacion_id,
+
+            monto,
+
+            fecha_pago,
+
+            metodo_pago,
+
+            numero_operacion,
+
+            observaciones,
+
+            boleta_generada,
+
+            boleta_serie,
+
+            boleta_numero,
+
+            boleta_fecha,
+
+            boleta_pdf_url
+
+          )
+
+          VALUES (
+
+            $1,
+
+            $2,
+
+            $3,
+
+            NULL,
+
+            NULL,
+
+            $4,
+
+            FALSE,
+
+            NULL,
+
+            NULL,
+
+            NULL,
+
+            NULL
+
+          )
+        `, [
+
+          homologacionId,
+
+          montoCancelado,
+
+          fechaRegistro ||
+            new Date()
+              .toISOString()
+              .substring(0, 10),
+
+          'Pago inicial importado desde Google Sheets.'
+
+        ]);
+
+
+        pagosIniciales++;
 
       }
 
+
+      // ======================================================
+      // CONFIRMAR TRANSACCIÓN
+      // ======================================================
+
+      await client.query(
+        'COMMIT'
+      );
+
+
+      creados++;
+
+
+      console.log(
+        `Homologación creada: ` +
+        `Google ID ${googleId} | ` +
+        `${alumno} | ` +
+        `Total S/ ${montoIndicado.toFixed(2)} | ` +
+        `Cancelado S/ ${montoCancelado.toFixed(2)} | ` +
+        `Saldo S/ ${saldoInicial.toFixed(2)}`
+      );
+
     }
+
     catch (err) {
+
+      try {
+
+        await client.query(
+          'ROLLBACK'
+        );
+
+      }
+      catch (
+        rollbackError
+      ) {
+
+        console.error(
+          'Error haciendo rollback:',
+          rollbackError
+        );
+
+      }
+
 
       errores.push({
 
@@ -1326,15 +1975,34 @@ async function importarDesdeSheets() {
         dni:
           row["DNI"],
 
+        alumno:
+          row["APELLIDOS Y NOMBRES"],
+
         mensaje:
           err.message
 
       });
 
+
+      console.error(
+        `Error importando Google ID ${row["ID"]}:`,
+        err.message
+      );
+
+    }
+
+    finally {
+
+      client.release();
+
     }
 
   }
 
+
+  // ==========================================================
+  // RESULTADO
+  // ==========================================================
 
   return {
 
@@ -1342,13 +2010,13 @@ async function importarDesdeSheets() {
 
     creados,
 
-    actualizados,
-
     omitidos,
 
-    omitidosDetalle,
+    pagosIniciales,
 
     errores,
+
+    omitidosDetalle,
 
     totalFilas:
       filas.length
@@ -1379,3 +2047,4 @@ module.exports = {
   importarDesdeSheets
 
 };
+
