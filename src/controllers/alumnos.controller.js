@@ -98,6 +98,10 @@ async function crear(req, res) {
   try {
     const errores = validarAlumno(req.body);
 
+    tipo_documento: body.tipo_documento
+      ? String(body.tipo_documento).trim().toUpperCase()
+      : 'DNI'
+
     if (errores.length > 0) {
       return res.status(400).json({
         ok: false,
@@ -116,6 +120,7 @@ async function crear(req, res) {
       foto_url
     });
 
+  
     res.status(201).json({
       ok: true,
       message: 'Alumno creado correctamente.',
