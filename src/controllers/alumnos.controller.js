@@ -150,58 +150,68 @@ res.status(500).json({
 
 }
 }
-
 async function actualizar(req, res) {
-  try {
-    const { id } = req.params;
-    const errores = validarAlumno(req.body);
+try {
+const { id } = req.params;
 
-    if (errores.length > 0) {
-      return res.status(400).json({
-        ok: false,
-        message: 'Datos inválidos.',
-        errores
-      });
-    }
+const body = {
+  ...req.body,
 
-    let foto_url = req.body.foto_url || null;
+  tipo_documento: req.body.tipo_documento
+    ? String(req.body.tipo_documento).trim().toUpperCase()
+    : 'DNI'
+};
 
-    if (req.file) {
-      foto_url = `/uploads/alumnos/${req.file.filename}`; // 👈 ERROR: Ruta local fija
-    }
+const errores = validarAlumno(body);
 
-    const actualizado = await alumnosService.actualizarAlumno(id, {
-      ...req.body,
-      foto_url
-    });
+if (errores.length > 0) {
+  return res.status(400).json({
+    ok: false,
+    message: 'Datos inválidos.',
+    errores
+  });
+}
 
-    if (!actualizado) {
-      return res.status(404).json({
-        ok: false,
-        message: 'Alumno no encontrado.'
-      });
-    }
+let foto_url = req.body.foto_url || null;
 
-    res.json({
-      ok: true,
-      message: 'Alumno actualizado correctamente.',
-      data: actualizado
-    });
-  } catch (error) {
-    console.error('Error al actualizar alumno:', error);
+if (req.file) {
+  foto_url = `/uploads/alumnos/${req.file.filename}`;
+}
 
-    if (error.code === '23505') {
-      return res.status(409).json({
-        ok: false,
-        message: 'Ya existe un alumno con ese DNI.'
-      });
-    }
+const actualizado = await alumnosService.actualizarAlumno(id, {
+  ...body,
+  foto_url
+});
 
-    res.status(500).json({
-      ok: false,
-      message: error.message || 'Error al actualizar alumno.'
-    });
-  }
+if (!actualizado) {
+  return res.status(404).json({
+    ok: false,
+    message: 'Alumno no encontrado.'
+  });
+}
+
+res.json({
+  ok: true,
+  message: 'Alumno actualizado correctamente.',
+  data: actualizado
+});
+
+} catch (error) {
+console.error('Error al actualizar alumno:', error);
+
+if (error.code === '23505') {
+  return res.status(409).json({
+    ok: false,
+    message: 'Ya existe un alumno con ese documento.'
+  });
+}
+
+res.status(500).json({
+  ok: false,
+  message: error.message || 'Error al actualizar alumno.'
+});
+
+}
 }
 
 async function eliminar(req, res) {
