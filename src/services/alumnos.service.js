@@ -1,6 +1,11 @@
 const pool = require('../config/db');
 
-async function listarAlumnos({ search = '', activos = true, anio = null, mes = null }) {
+async function listarAlumnos({
+  search = '',
+  activos = true,
+  anio = null,
+  mes = null
+}) {
   const values = [];
   let where = 'WHERE 1=1';
 
@@ -24,7 +29,7 @@ async function listarAlumnos({ search = '', activos = true, anio = null, mes = n
     const idx = values.length;
 
     where += ` AND (
-      unaccent(COALESCE(dni, '')) ILIKE unaccent($${idx})
+      unaccent(COALESCE(numero_documento, '')) ILIKE unaccent($${idx})
       OR unaccent(COALESCE(nombres, '')) ILIKE unaccent($${idx})
       OR unaccent(COALESCE(apellidos, '')) ILIKE unaccent($${idx})
       OR unaccent(COALESCE(correo, '')) ILIKE unaccent($${idx})
@@ -35,24 +40,24 @@ async function listarAlumnos({ search = '', activos = true, anio = null, mes = n
   }
 
   const query = `
-  SELECT
-    id,
-    tipo_documento,
-    dni,
-    nombres,
-    apellidos,
-    fecha_nacimiento,
-    telefono,
-    correo,
-    direccion,
-    foto_url,
-    observaciones,
-    fecha_registro,
-    activo,
-    seguro_alumno,
-    anio_ingreso,
-    mes_ingreso
-  FROM alumnos  
+    SELECT
+      id,
+      tipo_documento,
+      numero_documento AS dni,
+      nombres,
+      apellidos,
+      fecha_nacimiento,
+      telefono,
+      correo,
+      direccion,
+      foto_url,
+      observaciones,
+      fecha_registro,
+      activo,
+      seguro_alumno,
+      anio_ingreso,
+      mes_ingreso
+    FROM alumnos
     ${where}
     ORDER BY
       anio_ingreso DESC NULLS LAST,
@@ -75,6 +80,7 @@ async function listarAlumnos({ search = '', activos = true, anio = null, mes = n
   `;
 
   const result = await pool.query(query, values);
+
   return result.rows;
 }
 
@@ -83,7 +89,7 @@ async function obtenerAlumnoPorId(id) {
     SELECT
       id,
       tipo_documento,
-      dni,
+      numero_documento AS dni,
       nombres,
       apellidos,
       fecha_nacimiento,
@@ -103,31 +109,48 @@ async function obtenerAlumnoPorId(id) {
   `;
 
   const result = await pool.query(query, [id]);
+
   return result.rows[0] || null;
 }
 
 async function crearAlumno(data) {
   const query = `
-  INSERT INTO alumnos (
-    tipo_documento,
-    dni,
-    nombres,
-    apellidos,
-    fecha_nacimiento,
-    telefono,
-    correo,
-    direccion,
-    foto_url,
-    observaciones,
-    activo,
-    seguro_alumno,
-    anio_ingreso,
-    mes_ingreso
-  )
-  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE,$11,$12,$13)
-  RETURNING *
+    INSERT INTO alumnos (
+      tipo_documento,
+      numero_documento,
+      nombres,
+      apellidos,
+      fecha_nacimiento,
+      telefono,
+      correo,
+      direccion,
+      foto_url,
+      observaciones,
+      activo,
+      seguro_alumno,
+      anio_ingreso,
+      mes_ingreso
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE,$11,$12,$13)
+    RETURNING
+      id,
+      tipo_documento,
+      numero_documento AS dni,
+      nombres,
+      apellidos,
+      fecha_nacimiento,
+      telefono,
+      correo,
+      direccion,
+      foto_url,
+      observaciones,
+      fecha_registro,
+      activo,
+      seguro_alumno,
+      anio_ingreso,
+      mes_ingreso
   `;
-  
+
   const values = [
     data.tipo_documento || 'DNI',
     data.dni,
@@ -142,37 +165,56 @@ async function crearAlumno(data) {
     data.seguro_alumno
       ? String(data.seguro_alumno).trim().toUpperCase()
       : null,
-    data.anio_ingreso ? Number(data.anio_ingreso) : null,
+    data.anio_ingreso
+      ? Number(data.anio_ingreso)
+      : null,
     data.mes_ingreso
       ? String(data.mes_ingreso).trim().toUpperCase()
       : null
   ];
 
   const result = await pool.query(query, values);
+
   return result.rows[0];
 }
 
 async function actualizarAlumno(id, data) {
   const query = `
     UPDATE alumnos
-SET
-  tipo_documento = $1,
-  dni = $2,
-  nombres = $3,
-  apellidos = $4,
-  fecha_nacimiento = $5,
-  telefono = $6,
-  correo = $7,
-  direccion = $8,
-  foto_url = $9,
-  observaciones = $10,
-  seguro_alumno = $11,
-  anio_ingreso = $12,
-  mes_ingreso = $13
-WHERE id = $14
-RETURNING *
+    SET
+      tipo_documento = $1,
+      numero_documento = $2,
+      nombres = $3,
+      apellidos = $4,
+      fecha_nacimiento = $5,
+      telefono = $6,
+      correo = $7,
+      direccion = $8,
+      foto_url = $9,
+      observaciones = $10,
+      seguro_alumno = $11,
+      anio_ingreso = $12,
+      mes_ingreso = $13
+    WHERE id = $14
+    RETURNING
+      id,
+      tipo_documento,
+      numero_documento AS dni,
+      nombres,
+      apellidos,
+      fecha_nacimiento,
+      telefono,
+      correo,
+      direccion,
+      foto_url,
+      observaciones,
+      fecha_registro,
+      activo,
+      seguro_alumno,
+      anio_ingreso,
+      mes_ingreso
   `;
-  
+
   const values = [
     data.tipo_documento || 'DNI',
     data.dni,
@@ -187,12 +229,17 @@ RETURNING *
     data.seguro_alumno
       ? String(data.seguro_alumno).trim().toUpperCase()
       : null,
-    data.anio_ingreso ? Number(data.anio_ingreso) : null,
-    data.mes_ingreso ? String(data.mes_ingreso).trim().toUpperCase() : null,
+    data.anio_ingreso
+      ? Number(data.anio_ingreso)
+      : null,
+    data.mes_ingreso
+      ? String(data.mes_ingreso).trim().toUpperCase()
+      : null,
     id
   ];
 
   const result = await pool.query(query, values);
+
   return result.rows[0] || null;
 }
 
@@ -203,7 +250,9 @@ async function eliminarAlumnoLogico(id) {
     WHERE id = $1
     RETURNING id, activo
   `;
+
   const result = await pool.query(query, [id]);
+
   return result.rows[0] || null;
 }
 
@@ -214,7 +263,9 @@ async function reactivarAlumno(id) {
     WHERE id = $1
     RETURNING *
   `;
+
   const result = await pool.query(query, [id]);
+
   return result.rows[0] || null;
 }
 
