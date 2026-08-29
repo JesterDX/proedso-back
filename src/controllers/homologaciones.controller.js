@@ -1,3 +1,4 @@
+
 const service =
   require('../services/homologaciones-service');
 
@@ -15,7 +16,7 @@ async function importarSheets(req, res) {
       await service.importarDesdeSheets();
 
 
-    res.json({
+    return res.json({
 
       ok: true,
 
@@ -32,7 +33,7 @@ async function importarSheets(req, res) {
     );
 
 
-    res.status(500).json({
+    return res.status(500).json({
 
       ok: false,
 
@@ -60,7 +61,7 @@ async function listar(req, res) {
       await service.listarHomologaciones();
 
 
-    res.json({
+    return res.json({
 
       ok: true,
 
@@ -77,7 +78,7 @@ async function listar(req, res) {
     );
 
 
-    res.status(500).json({
+    return res.status(500).json({
 
       ok: false,
 
@@ -105,7 +106,10 @@ async function obtener(req, res) {
       Number(req.params.id);
 
 
-    if (!Number.isInteger(id) || id <= 0) {
+    if (
+      !Number.isInteger(id) ||
+      id <= 0
+    ) {
 
       return res.status(400).json({
 
@@ -177,7 +181,10 @@ async function actualizar(req, res) {
       Number(req.params.id);
 
 
-    if (!Number.isInteger(id) || id <= 0) {
+    if (
+      !Number.isInteger(id) ||
+      id <= 0
+    ) {
 
       return res.status(400).json({
 
@@ -210,11 +217,8 @@ async function actualizar(req, res) {
 
     const data =
       await service.actualizarHomologacion(
-
         id,
-
         req.body
-
       );
 
 
@@ -309,11 +313,8 @@ async function registrarPago(req, res) {
 
     const data =
       await service.registrarPago(
-
         homologacionId,
-
         req.body
-
       );
 
 
@@ -400,9 +401,7 @@ async function listarPagos(req, res) {
 
     const data =
       await service.listarPagos(
-
         homologacionId
-
       );
 
 
@@ -469,9 +468,7 @@ async function eliminarPago(req, res) {
 
 
     await service.eliminarPago(
-
       pagoId
-
     );
 
 
@@ -536,3 +533,4 @@ module.exports = {
   eliminarPago
 
 };
+
