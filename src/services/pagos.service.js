@@ -408,6 +408,7 @@ async function listarResumenPagos() {
       pc.nombre AS plan_nombre,
 
       m.fecha_matricula,
+      m.fecha_inicio,
 
       COALESCE(
         SUM(c.saldo_pendiente),
@@ -485,7 +486,8 @@ async function listarResumenPagos() {
       a.apellidos,
       a.foto_url,
       pc.nombre,
-      m.fecha_matricula
+      m.fecha_matricula,
+      m.fecha_inicio
 
     ORDER BY
       alumno ASC
