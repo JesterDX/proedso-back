@@ -191,47 +191,54 @@ async function obtenerNotificacionesPagos() {
       item.tipo_notificacion === 'VENCIDA';
 
     return {
-
+    
       matricula_id: Number(item.matricula_id),
-
+    
       alumno_id: Number(item.alumno_id),
-
-      alumno_dni: item.dni,
-
+    
+      alumno_dni: item.numero_documento,
+    
       alumno_nombres: item.nombres,
-
+    
       alumno_apellidos: item.apellidos,
-
+    
+      alumno_telefono: item.telefono,
+    
+      alumno_correo: item.correo,
+    
       cuota_id: Number(item.cuota_id),
-
+    
       numero_cuota:
         item.numero_cuota !== null
           ? Number(item.numero_cuota)
           : null,
-
-      concepto_codigo: item.concepto_codigo,
-
-      concepto_nombre: item.concepto_nombre,
-
+    
+      concepto_codigo:
+        item.concepto_codigo,
+    
+      concepto_nombre:
+        item.concepto_nombre,
+    
       fecha_vencimiento:
         item.fecha_vencimiento,
-
+    
       monto_programado:
         Number(item.monto_programado || 0),
-
+    
       monto_pagado:
         Number(item.monto_pagado || 0),
-
+    
       saldo_pendiente:
         Number(item.saldo_pendiente || 0),
-
+    
       tipo:
         item.tipo_notificacion,
-
+    
       dias:
         esVencida
           ? Number(item.dias_vencida || 0)
           : Number(item.dias_restantes || 0)
+    
     };
   };
 
