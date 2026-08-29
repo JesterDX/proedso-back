@@ -116,7 +116,7 @@ async function listarMatriculas(filtros = {}) {
 
     where += `
       AND (
-        a.dni ILIKE ${param}
+        a.numero_documento ILIKE ${param}
 
         OR unaccent(
           lower(a.nombres)
@@ -1520,7 +1520,7 @@ async function obtenerDetalleMatricula(
         m.activo,
         m.fecha_creacion,
 
-        a.dni AS alumno_dni,
+        a.numero_documento AS alumno_dni,
         a.nombres AS alumno_nombres,
         a.apellidos AS alumno_apellidos,
         a.fecha_nacimiento AS alumno_fecha_nacimiento,
