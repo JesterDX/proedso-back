@@ -24,6 +24,7 @@ async function listar(req, res) {
 
 }
 
+
 async function listarActivos(req, res) {
 
   try {
@@ -47,6 +48,7 @@ async function listarActivos(req, res) {
   }
 
 }
+
 
 async function crear(req, res) {
 
@@ -72,6 +74,7 @@ async function crear(req, res) {
   }
 
 }
+
 
 async function actualizar(req, res) {
 
@@ -101,6 +104,7 @@ async function actualizar(req, res) {
 
 }
 
+
 async function cambiarEstado(req, res) {
 
   try {
@@ -128,6 +132,7 @@ async function cambiarEstado(req, res) {
   }
 
 }
+
 
 module.exports = {
   listar,
