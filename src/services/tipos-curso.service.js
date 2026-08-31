@@ -17,50 +17,28 @@ async function listarTiposCurso() {
   const result = await pool.query(query);
 
   return result.rows;
-
-}
-
-async function listarActivos(req,res){
-
-    try{
-
-        const data = await tiposCursoService.listarTiposCursoActivos();
-
-        res.json({
-            ok:true,
-            data
-        });
-
-    }catch(err){
-
-        console.error(err);
-
-        res.status(500).json({
-            ok:false
-        });
-
-    }
-
 }
 
 
-async function listarTiposCursoActivos(){
+async function listarTiposCursoActivos() {
 
-    const query = `
-        SELECT
-            id,
-            codigo,
-            nombre
-        FROM tipos_curso
-        WHERE activo=true
-        ORDER BY nombre;
-    `;
+  const query = `
+    SELECT
+      id,
+      codigo,
+      nombre,
+      duracion_meses,
+      cantidad_maquinas
+    FROM tipos_curso
+    WHERE activo = true
+    ORDER BY nombre ASC
+  `;
 
-    const result = await pool.query(query);
+  const result = await pool.query(query);
 
-    return result.rows;
-
+  return result.rows;
 }
+
 
 async function crearTipoCurso(data) {
 
@@ -82,7 +60,7 @@ async function crearTipoCurso(data) {
       activo
     )
     VALUES
-    ($1,$2,$3,$4,$5)
+    ($1, $2, $3, $4, $5)
     RETURNING *
   `;
 
@@ -95,8 +73,8 @@ async function crearTipoCurso(data) {
   ]);
 
   return result.rows[0];
-
 }
+
 
 async function actualizarTipoCurso(id, data) {
 
@@ -127,8 +105,8 @@ async function actualizarTipoCurso(id, data) {
   ]);
 
   return result.rows[0];
-
 }
+
 
 async function cambiarEstado(id, activo) {
 
@@ -145,14 +123,13 @@ async function cambiarEstado(id, activo) {
   ]);
 
   return result.rows[0];
-
 }
+
 
 module.exports = {
   listarTiposCurso,
-  listarActivos,
+  listarTiposCursoActivos,
   crearTipoCurso,
   actualizarTipoCurso,
-  cambiarEstado,
-  listarTiposCursoActivos
+  cambiarEstado
 };
