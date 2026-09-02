@@ -3,57 +3,49 @@ const controller = require('../controllers/planes-curso.controller');
 
 const router = express.Router();
 
+// ============================================================
+// LISTAR PLANES DE CURSO
+// ============================================================
 
 router.get(
-  '/',
-  controller.listar
+'/',
+controller.listar
 );
 
+// ============================================================
+// OBTENER PLAN DE CURSO POR ID
+// ============================================================
 
 router.get(
-  '/activos',
-  controller.listarPlanesCursoActivos
+'/:id',
+controller.obtener
 );
 
-
-router.get(
-  '/:id/maquinas',
-  controller.maquinas
-);
-
-
-router.get(
-  '/:id',
-  controller.obtenerPorId
-);
-
+// ============================================================
+// CREAR PLAN DE CURSO
+// ============================================================
 
 router.post(
-  '/',
-  controller.crear
+'/',
+controller.crear
 );
 
-router.post(
- '/completo',
- controller.crearCompleto
-);
+// ============================================================
+// ACTUALIZAR PLAN DE CURSO
+// ============================================================
 
 router.put(
-  '/:id/configuracion',
-  controller.guardarConfiguracion
+'/:id',
+controller.actualizar
 );
 
-
-router.put(
-  '/:id',
-  controller.actualizar
-);
-
+// ============================================================
+// CAMBIAR ESTADO
+// ============================================================
 
 router.patch(
-  '/:id/estado',
-  controller.cambiarEstado
+'/:id/estado',
+controller.cambiarEstado
 );
-
 
 module.exports = router;
