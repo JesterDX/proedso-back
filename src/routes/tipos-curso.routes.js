@@ -1,10 +1,11 @@
 const express = require('express');
-const controller = require('../controllers/planes-curso.controller');
+const controller = require('../controllers/tipos-curso.controller');
 
 const router = express.Router();
 
 router.get('/', controller.listar);
-router.get('/:id', controller.obtenerDetalle);
+
+router.get('/activos', controller.listarActivos);
 
 router.post('/', controller.crear);
 
