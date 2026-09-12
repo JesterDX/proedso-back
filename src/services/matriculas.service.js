@@ -216,7 +216,7 @@ async function listarMatriculas(filtros = {}) {
           THEN true
           ELSE false
       END
-          AS certificacion_incluida,
+          AS certificacionIncluida,
   
       ppa.cantidad_cuotas
           AS cantidad_cuotas,
@@ -989,7 +989,7 @@ if (cambioMaquinas) {
 
       data.cuota_inicial !== undefined ||
 
-      data.certificacion_incluida !== undefined ||
+      data.certificacionIncluida !== undefined ||
 
       data.costo_certificacion !== undefined ||
 
@@ -1219,11 +1219,11 @@ if (cambioMaquinas) {
 
       const certificacionIncluida =
 
-        data.certificacion_incluida !== undefined &&
-        data.certificacion_incluida !== null
+        data.certificacionIncluida !== undefined &&
+        data.certificacionIncluida !== null
 
           ? Boolean(
-              data.certificacion_incluida
+              data.certificacionIncluida
             )
 
           : Number(
@@ -6512,7 +6512,7 @@ async function crearMatricula(
 
         // true
         certificacionIncluidaPersonalizada:
-          data.certificacion_incluida,
+          data.certificacionIncluida,
 
         // S/ 10
         costoCertificacionPersonalizado:
@@ -8670,7 +8670,7 @@ async function calcularPrevisualizacionPlanPago(
         modalidadPago,
         data.monto_total,
         data.cuota_inicial,
-        data.certificacion_incluida,
+        data.certificacionIncluida,
         data.costo_certificacion
       );
  
