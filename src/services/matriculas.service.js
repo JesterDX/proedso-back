@@ -75,6 +75,9 @@ function compararArraysNumericos(a = [], b = []) {
 // ==========================================================
 // LISTAR MATRÍCULAS
 // ==========================================================
+// ==========================================================
+// LISTAR MATRÍCULAS
+// ==========================================================
 
 async function listarMatriculas(filtros = {}) {
 
@@ -135,7 +138,7 @@ async function listarMatriculas(filtros = {}) {
   }
 
   // =====================================================
-  // FILTRO POR AÑO: Prioriza fecha_inicio, luego fecha_matricula
+  // FILTRO POR AÑO: Prioridad 1: fecha_inicio | Prioridad 2: fecha_matricula
   // =====================================================
   if (anio) {
     values.push(
@@ -150,7 +153,7 @@ async function listarMatriculas(filtros = {}) {
   }
 
   // =====================================================
-  // FILTRO POR MES: Prioriza fecha_inicio, luego fecha_matricula
+  // FILTRO POR MES: Prioridad 1: fecha_inicio | Prioridad 2: fecha_matricula
   // =====================================================
   if (mes) {
     values.push(
@@ -193,7 +196,7 @@ async function listarMatriculas(filtros = {}) {
       m.fecha_creacion,
   
       -- =====================================================
-      -- DATOS FINANCIEROS PARA EL FRONT
+      -- DATOS FINANCIEROS
       -- =====================================================
   
       ppa.monto_cuota
