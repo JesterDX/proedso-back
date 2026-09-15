@@ -72,7 +72,6 @@ function compararArraysNumericos(a = [], b = []) {
 // ==========================================================
 // LISTAR MATRÍCULAS
 // ==========================================================
-
 async function listarMatriculas(filtros = {}) {
 
   const {
@@ -89,9 +88,7 @@ async function listarMatriculas(filtros = {}) {
   `;
 
   if (estado) {
-
     values.push(estado);
-
     where += `
       AND ea.codigo = $${values.length}
     `;
@@ -101,7 +98,6 @@ async function listarMatriculas(filtros = {}) {
     search &&
     String(search).trim() !== ''
   ) {
-
     const searchNormalizado =
       String(search)
         .trim()
@@ -111,8 +107,7 @@ async function listarMatriculas(filtros = {}) {
       `%${searchNormalizado}%`
     );
 
-    const param =
-      `$${values.length}`;
+    const param = `$${values.length}`;
 
     where += `
       AND (
@@ -131,43 +126,41 @@ async function listarMatriculas(filtros = {}) {
             a.apellidos || ' ' || a.nombres
           )
         ) LIKE unaccent(${param})
-
-        OR unaccent(
-          lower(
-            a.apellidos || ' ' || a.nombres
-          )
-        ) LIKE unaccent(${param})
       )
     `;
   }
 
+  // =====================================================
+  // FILTRO POR AÑO: Prioriza fecha_matricula, luego fecha_inicio
+  // =====================================================
   if (anio) {
-
     values.push(
       Number(anio)
     );
 
     where += `
       AND EXTRACT(
-        YEAR FROM m.fecha_matricula
+        YEAR FROM COALESCE(m.fecha_matricula, m.fecha_inicio)
       ) = $${values.length}
     `;
   }
 
+  // =====================================================
+  // FILTRO POR MES: Prioriza fecha_matricula, luego fecha_inicio
+  // =====================================================
   if (mes) {
-
     values.push(
       Number(mes)
     );
 
     where += `
       AND EXTRACT(
-        MONTH FROM m.fecha_matricula
+        MONTH FROM COALESCE(m.fecha_matricula, m.fecha_inicio)
       ) = $${values.length}
     `;
   }
 
- const query = `
+  const query = `
   SELECT
       m.id,
       m.alumno_id,
@@ -241,7 +234,7 @@ async function listarMatriculas(filtros = {}) {
   ${where}
   
   ORDER BY
-      m.fecha_matricula DESC,
+      COALESCE(m.fecha_matricula, m.fecha_inicio) DESC,
       m.id DESC
   `;
 
@@ -253,7 +246,6 @@ async function listarMatriculas(filtros = {}) {
 
   return result.rows;
 }
-
 // ==========================================================
 // OBTENER MATRÍCULA POR ID
 // ==========================================================
