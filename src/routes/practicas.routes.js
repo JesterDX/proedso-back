@@ -16,6 +16,10 @@ router.get(
   "/lugares-practica",
   practicasController.obtenerLugaresPractica
 );
+router.post(
+  "/lugares-practica",
+  practicasController.crearLugarPractica
+);
 
 router.get(
   '/pendientes',
