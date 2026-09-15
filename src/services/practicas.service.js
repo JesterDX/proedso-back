@@ -1595,6 +1595,75 @@ async function obtenerDetallePracticas(
   };
 
 }
+
+
+async function crearLugarPractica(nombre) {
+
+  if (!nombre || !nombre.trim()) {
+    throw new Error('Debe indicar el nombre del lugar de práctica.');
+  }
+
+  const nombreNormalizado = nombre.trim();
+
+  // Evitar lugares duplicados
+  const existente = await pool.query(
+    `
+    SELECT
+      id,
+      nombre,
+      activo
+    FROM lugares_practica
+    WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($1))
+    LIMIT 1
+    `,
+    [nombreNormalizado]
+  );
+
+  if (existente.rows.length > 0) {
+
+    const lugar = existente.rows[0];
+
+    // Si existía pero estaba inactivo, lo reactivamos
+    if (!lugar.activo) {
+
+      const reactivado = await pool.query(
+        `
+        UPDATE lugares_practica
+        SET activo = TRUE
+        WHERE id = $1
+        RETURNING id, nombre, activo
+        `,
+        [lugar.id]
+      );
+
+      return reactivado.rows[0];
+    }
+
+    throw new Error(
+      'Ya existe un lugar de práctica con ese nombre.'
+    );
+  }
+
+  const result = await pool.query(
+    `
+    INSERT INTO lugares_practica (
+      nombre,
+      activo
+    )
+    VALUES (
+      $1,
+      TRUE
+    )
+    RETURNING
+      id,
+      nombre,
+      activo
+    `,
+    [nombreNormalizado]
+  );
+
+  return result.rows[0];
+}
 module.exports = {
   listarAlumnosDisponibles,
   crearSesionGrupal,
@@ -1613,5 +1682,6 @@ module.exports = {
   listarAsignaciones,
   listarSesiones,
   registrarAsistencia,
-  obtenerDetallePracticas
+  obtenerDetallePracticas,
+  crearLugarPractica
 };
