@@ -72,6 +72,10 @@ function compararArraysNumericos(a = [], b = []) {
 // ==========================================================
 // LISTAR MATRÍCULAS
 // ==========================================================
+// ==========================================================
+// LISTAR MATRÍCULAS
+// ==========================================================
+
 async function listarMatriculas(filtros = {}) {
 
   const {
@@ -131,7 +135,7 @@ async function listarMatriculas(filtros = {}) {
   }
 
   // =====================================================
-  // FILTRO POR AÑO: Prioriza fecha_matricula, luego fecha_inicio
+  // FILTRO POR AÑO: Prioriza fecha_inicio, luego fecha_matricula
   // =====================================================
   if (anio) {
     values.push(
@@ -140,13 +144,13 @@ async function listarMatriculas(filtros = {}) {
 
     where += `
       AND EXTRACT(
-        YEAR FROM COALESCE(m.fecha_matricula, m.fecha_inicio)
+        YEAR FROM COALESCE(m.fecha_inicio, m.fecha_matricula)
       ) = $${values.length}
     `;
   }
 
   // =====================================================
-  // FILTRO POR MES: Prioriza fecha_matricula, luego fecha_inicio
+  // FILTRO POR MES: Prioriza fecha_inicio, luego fecha_matricula
   // =====================================================
   if (mes) {
     values.push(
@@ -155,7 +159,7 @@ async function listarMatriculas(filtros = {}) {
 
     where += `
       AND EXTRACT(
-        MONTH FROM COALESCE(m.fecha_matricula, m.fecha_inicio)
+        MONTH FROM COALESCE(m.fecha_inicio, m.fecha_matricula)
       ) = $${values.length}
     `;
   }
@@ -234,7 +238,7 @@ async function listarMatriculas(filtros = {}) {
   ${where}
   
   ORDER BY
-      COALESCE(m.fecha_matricula, m.fecha_inicio) DESC,
+      COALESCE(m.fecha_inicio, m.fecha_matricula) DESC,
       m.id DESC
   `;
 
