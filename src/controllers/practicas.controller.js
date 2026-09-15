@@ -573,6 +573,38 @@ async function obtenerUltimaPendiente(req,res){
 
 }
 
+
+async function crearLugarPractica(req, res) {
+
+  try {
+
+    const { nombre } = req.body;
+
+    const data =
+      await practicasService.crearLugarPractica(nombre);
+
+    return res.status(201).json({
+      ok: true,
+      data
+    });
+
+  } catch (error) {
+
+    console.error(
+      '❌ crearLugarPractica:',
+      error
+    );
+
+    return res.status(400).json({
+      ok: false,
+      error:
+        error.message ||
+        'No se pudo crear el lugar de práctica.'
+    });
+
+  }
+
+}
 module.exports = {
   listarAlumnosDisponibles,
   crearSesionGrupal,
@@ -592,5 +624,6 @@ module.exports = {
   crearAsignacionPracticas,
   listarAsignaciones,
   listarSesiones,
-  registrarAsistencia
+  registrarAsistencia,
+  crearLugarPractica
 };
