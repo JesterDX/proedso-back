@@ -1820,7 +1820,6 @@ async function insertarMatriculaMaquina(
 // ==========================================================
 // OBTENER PRECIO VIGENTE
 // ==========================================================
-
 async function obtenerPlanPrecioVigente(
   client,
   planCursoId,
@@ -1930,10 +1929,14 @@ async function obtenerPlanPrecioVigente(
     `;
   }
 
+  // ======================================================
+  // PLANES CON PRECIO BASE DEL PLAN
+  // ======================================================
+
   if (
-  tipo === 'TRIPLE' ||
-  tipo === 'MULTIPLE' ||
-  tipo === 'CUADRUPLE'
+    tipo === 'TRIPLE' ||
+    tipo === 'MULTIPLE' ||
+    tipo === 'CUADRUPLE'
   ) {
 
     query += `
@@ -1957,7 +1960,6 @@ async function obtenerPlanPrecioVigente(
 
   return result.rows[0] || null;
 }
-
 // ==========================================================
 // CONCEPTO DE COBRO
 // ==========================================================
