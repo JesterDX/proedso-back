@@ -1931,8 +1931,9 @@ async function obtenerPlanPrecioVigente(
   }
 
   if (
-    tipo === 'TRIPLE' ||
-    tipo === 'MULTIPLE'
+  tipo === 'TRIPLE' ||
+  tipo === 'MULTIPLE' ||
+  tipo === 'CUADRUPLE'
   ) {
 
     query += `
