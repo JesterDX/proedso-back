@@ -835,6 +835,47 @@ console.log(
 }
 
 
+async function eliminarMatriculaCompleta(req, res) {
+  try {
+    const { id } = req.params;
+
+    const matriculaId = parseInt(id, 10);
+
+    if (isNaN(matriculaId)) {
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'El ID de la matrícula no es válido.'
+      });
+    }
+
+    // Usuario autenticado, si tu middleware lo agrega
+    const user = req.user || null;
+
+    const resultado =
+      await matriculasService.eliminarMatriculaCompleta(
+        matriculaId,
+        user
+      );
+
+    return res.status(200).json(resultado);
+
+  } catch (error) {
+    console.error(
+      'Error al eliminar matrícula completa:',
+      error
+    );
+
+    return res.status(500).json({
+      ok: false,
+      mensaje:
+        error.message ||
+        'Error al eliminar la matrícula.'
+    });
+  }
+}
+
+
+
 // ==========================================================
 // EXPORTS
 // ==========================================================
@@ -859,7 +900,9 @@ module.exports = {
 
   obtenerHistorial,
 
-  previsualizarPlanPagoController
+  previsualizarPlanPagoController,
+  
+  eliminarMatriculaCompleta
 
 };
 
