@@ -1664,6 +1664,232 @@ async function crearLugarPractica(nombre) {
 
   return result.rows[0];
 }
+
+
+async function eliminarMatriculaCompleta(
+  matriculaId,
+  user
+) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // ======================================================
+    // 1. VERIFICAR MATRÍCULA
+    // ======================================================
+
+    const matriculaResult = await client.query(
+      `
+      SELECT *
+      FROM matriculas
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [matriculaId]
+    );
+
+    if (!matriculaResult.rows.length) {
+      throw new Error(
+        'No se encontró la matrícula.'
+      );
+    }
+
+    const matricula =
+      matriculaResult.rows[0];
+
+
+    // ======================================================
+    // 2. OBTENER PLANES DE PAGO
+    // ======================================================
+
+    const planesPagoResult =
+      await client.query(
+        `
+        SELECT id
+        FROM planes_pago_alumno
+        WHERE matricula_id = $1
+        `,
+        [matriculaId]
+      );
+
+    const planesPagoIds =
+      planesPagoResult.rows.map(
+        row => row.id
+      );
+
+
+    // ======================================================
+    // 3. ELIMINAR CUOTAS
+    // ======================================================
+
+    if (planesPagoIds.length > 0) {
+
+      await client.query(
+        `
+        DELETE FROM cuotas
+        WHERE plan_pago_alumno_id = ANY($1::int[])
+        `,
+        [planesPagoIds]
+      );
+
+    }
+
+
+    // ======================================================
+    // 4. ELIMINAR PLANES DE PAGO
+    // ======================================================
+
+    await client.query(
+      `
+      DELETE FROM planes_pago_alumno
+      WHERE matricula_id = $1
+      `,
+      [matriculaId]
+    );
+
+
+    // ======================================================
+    // 5. OBTENER MATRÍCULA-MÁQUINAS
+    // ======================================================
+
+    const maquinasResult =
+      await client.query(
+        `
+        SELECT id
+        FROM matricula_maquinas
+        WHERE matricula_id = $1
+        `,
+        [matriculaId]
+      );
+
+    const matriculaMaquinaIds =
+      maquinasResult.rows.map(
+        row => row.id
+      );
+
+
+    // ======================================================
+    // 6. OBTENER ASIGNACIONES DE PRÁCTICAS
+    // ======================================================
+
+    const asignacionesResult =
+      matriculaMaquinaIds.length > 0
+        ? await client.query(
+            `
+            SELECT id
+            FROM practicas_asignaciones
+            WHERE matricula_maquina_id = ANY($1::int[])
+            `,
+            [matriculaMaquinaIds]
+          )
+        : { rows: [] };
+
+    const asignacionIds =
+      asignacionesResult.rows.map(
+        row => row.id
+      );
+
+
+    // ======================================================
+    // 7. ELIMINAR SESIONES DE PRÁCTICA
+    // ======================================================
+
+    if (asignacionIds.length > 0) {
+
+      await client.query(
+        `
+        DELETE FROM practicas_sesiones
+        WHERE asignacion_id = ANY($1::int[])
+        `,
+        [asignacionIds]
+      );
+
+    }
+
+
+    // ======================================================
+    // 8. ELIMINAR ASIGNACIONES
+    // ======================================================
+
+    if (matriculaMaquinaIds.length > 0) {
+
+      await client.query(
+        `
+        DELETE FROM practicas_asignaciones
+        WHERE matricula_maquina_id = ANY($1::int[])
+        `,
+        [matriculaMaquinaIds]
+      );
+
+    }
+
+
+    // ======================================================
+    // 9. ELIMINAR MÁQUINAS DE LA MATRÍCULA
+    // ======================================================
+
+    await client.query(
+      `
+      DELETE FROM matricula_maquinas
+      WHERE matricula_id = $1
+      `,
+      [matriculaId]
+    );
+
+
+    // ======================================================
+    // 10. HISTORIAL
+    // ======================================================
+
+    await client.query(
+      `
+      DELETE FROM matricula_historial
+      WHERE matricula_id = $1
+      `,
+      [matriculaId]
+    );
+
+
+    // ======================================================
+    // 11. ELIMINAR MATRÍCULA
+    // ======================================================
+
+    await client.query(
+      `
+      DELETE FROM matriculas
+      WHERE id = $1
+      `,
+      [matriculaId]
+    );
+
+
+    // ======================================================
+    // COMMIT
+    // ======================================================
+
+    await client.query('COMMIT');
+
+    return {
+      ok: true,
+      matricula_id: matriculaId,
+      mensaje: 'Matrícula eliminada correctamente.'
+    };
+
+  } catch (error) {
+
+    await client.query('ROLLBACK');
+
+    throw error;
+
+  } finally {
+
+    client.release();
+
+  }
+}
+
+
 module.exports = {
   listarAlumnosDisponibles,
   crearSesionGrupal,
@@ -1683,5 +1909,6 @@ module.exports = {
   listarSesiones,
   registrarAsistencia,
   obtenerDetallePracticas,
-  crearLugarPractica
+  crearLugarPractica,
+  eliminarMatriculaCompleta
 };
