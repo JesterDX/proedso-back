@@ -19,7 +19,10 @@ router.get('/:id/detalle', authMiddleware, controller.obtenerDetalle);
 router.get('/:id/maquinas', authMiddleware, controller.listarMaquinas);
 router.get('/:id/finanzas', authMiddleware, controller.obtenerFinanzas);
 router.get('/:id/historial', authMiddleware, controller.obtenerHistorial); 
-
+router.delete(
+  '/:id/completa',
+  matriculasController.eliminarMatriculaCompleta
+);
 router.get('/:id', authMiddleware, controller.obtenerPorId);
 
 // --- RUTAS DE ESCRITURA (¡Las más importantes para arreglar tu historial!) ---
