@@ -1685,6 +1685,5 @@ module.exports = {
   listarSesiones,
   registrarAsistencia,
   obtenerDetallePracticas,
-  crearLugarPractica,
-  eliminarMatriculaCompleta
+  crearLugarPractica
 };
