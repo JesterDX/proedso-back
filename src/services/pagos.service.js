@@ -806,6 +806,161 @@ async function registrarPago({
   }
 }
 
+// ============================================================
+// EDITAR MONTO DE UNA CUOTA
+// ============================================================
+
+async function editarMontoCuota(cuota_id, nuevo_monto) {
+
+  const client = await pool.connect();
+
+  try {
+
+    await client.query('BEGIN');
+
+    // --------------------------------------------------------
+    // VALIDAR ID
+    // --------------------------------------------------------
+
+    const cuotaId = Number(cuota_id);
+
+    if (!Number.isInteger(cuotaId)) {
+      throw new Error('cuota_id inválido');
+    }
+
+
+    // --------------------------------------------------------
+    // VALIDAR NUEVO MONTO
+    // --------------------------------------------------------
+
+    const nuevoMonto =
+      validarMontoPositivo(
+        nuevo_monto,
+        'El nuevo monto debe ser mayor a cero'
+      );
+
+
+    // --------------------------------------------------------
+    // BLOQUEAR CUOTA
+    // --------------------------------------------------------
+
+    const cuotaRes = await client.query(`
+      SELECT
+        id,
+        monto_programado,
+        monto_pagado,
+        saldo_pendiente,
+        estado
+      FROM cuotas
+      WHERE id = $1
+      FOR UPDATE
+    `, [cuotaId]);
+
+
+    if (!cuotaRes.rows.length) {
+      throw new Error('Cuota no encontrada');
+    }
+
+
+    const cuota = cuotaRes.rows[0];
+
+
+    // --------------------------------------------------------
+    // MONTO YA PAGADO
+    // --------------------------------------------------------
+
+    const montoPagado =
+      redondear(
+        numeroSeguro(cuota.monto_pagado)
+      );
+
+
+    // --------------------------------------------------------
+    // NO PERMITIR MONTO MENOR A LO YA PAGADO
+    // --------------------------------------------------------
+
+    if (nuevoMonto < montoPagado) {
+
+      throw new Error(
+        `El nuevo monto no puede ser menor al monto ya pagado de S/ ${montoPagado.toFixed(2)}`
+      );
+
+    }
+
+
+    // --------------------------------------------------------
+    // CALCULAR NUEVO SALDO
+    // --------------------------------------------------------
+
+    const nuevoSaldo =
+      redondear(
+        Math.max(
+          nuevoMonto - montoPagado,
+          0
+        )
+      );
+
+
+    // --------------------------------------------------------
+    // CALCULAR NUEVO ESTADO
+    // --------------------------------------------------------
+
+    const nuevoEstado =
+      nuevoSaldo <= 0
+        ? 'PAGADO'
+        : 'PENDIENTE';
+
+
+    // --------------------------------------------------------
+    // ACTUALIZAR SOLO ESTA CUOTA
+    // --------------------------------------------------------
+
+    const updateRes = await client.query(`
+      UPDATE cuotas
+
+      SET
+        monto_programado = $1,
+        saldo_pendiente = $2,
+        estado = $3
+
+      WHERE id = $4
+
+      RETURNING
+        id,
+        numero_cuota,
+        fecha_programada,
+        fecha_vencimiento,
+        monto_programado,
+        monto_pagado,
+        saldo_pendiente,
+        estado,
+        observaciones
+    `, [
+      nuevoMonto,
+      nuevoSaldo,
+      nuevoEstado,
+      cuotaId
+    ]);
+
+
+    await client.query('COMMIT');
+
+
+    return updateRes.rows[0];
+
+  } catch (error) {
+
+    await client.query('ROLLBACK');
+
+    throw error;
+
+  } finally {
+
+    client.release();
+
+  }
+}
+
 
 // ============================================================
 // BUSCAR MATRÍCULAS PARA PAGO
@@ -3874,6 +4029,8 @@ module.exports = {
 
   previsualizarCambioPlan,
 
-  aplicarCambioPlan
+  aplicarCambioPlan,
+
+  editarMontoCuota
 
 };
