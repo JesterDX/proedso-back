@@ -725,6 +725,52 @@ async function eliminar(req, res) {
 }
 
 
+// ============================================================
+// EDITAR MONTO DE UNA CUOTA
+// ============================================================
+
+async function editarMontoCuota(req, res) {
+
+  try {
+
+    const cuotaId = Number(req.params.id);
+
+    const {
+      monto
+    } = req.body;
+
+
+    const resultado =
+      await pagosService.editarMontoCuota(
+        cuotaId,
+        monto
+      );
+
+
+    return res.json({
+      ok: true,
+      message: 'Monto de la cuota actualizado correctamente.',
+      data: resultado
+    });
+
+  } catch (error) {
+
+    console.error(
+      'Error al editar monto de cuota:',
+      error
+    );
+
+    return res.status(400).json({
+      ok: false,
+      message:
+        error?.message ||
+        'No se pudo actualizar el monto de la cuota.'
+    });
+
+  }
+}
+
+
 module.exports = {
 
     listar,
@@ -753,6 +799,8 @@ module.exports = {
 
     editar,
 
-    eliminar
+    eliminar,
+
+    editarMontoCuota
 };
 
