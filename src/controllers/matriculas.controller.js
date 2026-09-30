@@ -876,6 +876,44 @@ async function eliminarMatriculaCompleta(req, res) {
 
 
 
+// ============================================================
+// CREAR MATRÍCULA ACELERADA
+// ============================================================
+
+async function crearMatriculaAceleradaController(req, res) {
+  try {
+    const data = req.body;
+
+    const user = req.user || null;
+
+    const resultado =
+      await matriculasService.crearMatriculaAcelerada(
+        data,
+        user
+      );
+
+    return res.status(201).json({
+      ok: true,
+      message:
+        'Matrícula acelerada creada correctamente.',
+      data: resultado
+    });
+
+  } catch (error) {
+    console.error(
+      '❌ Error al crear matrícula acelerada:',
+      error
+    );
+
+    return res.status(400).json({
+      ok: false,
+      message:
+        error?.message ||
+        'Error al crear la matrícula acelerada.'
+    });
+  }
+}
+
 // ==========================================================
 // EXPORTS
 // ==========================================================
@@ -902,7 +940,9 @@ module.exports = {
 
   previsualizarPlanPagoController,
   
-  eliminarMatriculaCompleta
+  eliminarMatriculaCompleta,
+
+  crearMatriculaAceleradaController
 
 };
 
