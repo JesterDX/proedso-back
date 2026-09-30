@@ -9269,6 +9269,827 @@ async function eliminarMatriculaCompleta(
 
   }
 }
+// ============================================================
+// CREAR MATRÍCULA ACELERADA
+// ============================================================
+async function crearMatriculaAcelerada(
+  data: CrearMatriculaAceleradaInput,
+  user: any
+) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // ========================================================
+    // VALIDACIONES BÁSICAS
+    // ========================================================
+
+    if (!data.alumno_id) {
+      throw new Error(
+        'El alumno es obligatorio.'
+      );
+    }
+
+    if (
+      !data.nombre_curso_manual ||
+      !data.nombre_curso_manual.trim()
+    ) {
+      throw new Error(
+        'El nombre del curso acelerado es obligatorio.'
+      );
+    }
+
+    if (!data.estado_alumno_id) {
+      throw new Error(
+        'El estado del alumno es obligatorio.'
+      );
+    }
+
+    if (!data.fecha_matricula) {
+      throw new Error(
+        'La fecha de matrícula es obligatoria.'
+      );
+    }
+
+    if (
+      !Array.isArray(data.maquinas) ||
+      data.maquinas.length === 0
+    ) {
+      throw new Error(
+        'Debe seleccionar al menos una máquina.'
+      );
+    }
+
+    if (!data.pago) {
+      throw new Error(
+        'La información de pago es obligatoria.'
+      );
+    }
+
+    if (
+      !Array.isArray(data.pago.cuotas) ||
+      data.pago.cuotas.length === 0
+    ) {
+      throw new Error(
+        'Debe registrar al menos una cuota.'
+      );
+    }
+
+    // ========================================================
+    // FECHAS
+    // ========================================================
+
+    const fechaMatricula =
+      normalizarFecha(
+        data.fecha_matricula
+      );
+
+    const fechaInicio =
+      normalizarFecha(
+        data.fecha_inicio
+      );
+
+    const fechaFinEstimada =
+      normalizarFecha(
+        data.fecha_fin_estimada
+      );
+
+    if (!fechaMatricula) {
+      throw new Error(
+        'La fecha de matrícula no es válida.'
+      );
+    }
+
+    // ========================================================
+    // VALIDAR ALUMNO
+    // ========================================================
+
+    const alumnoResult =
+      await client.query(
+        `
+        SELECT id
+        FROM alumnos
+        WHERE id = $1
+        `,
+        [data.alumno_id]
+      );
+
+    if (!alumnoResult.rows.length) {
+      throw new Error(
+        'El alumno seleccionado no existe.'
+      );
+    }
+
+    // ========================================================
+    // VALIDAR ESTADO
+    // ========================================================
+
+    const estadoResult =
+      await client.query(
+        `
+        SELECT id
+        FROM estados_alumno
+        WHERE id = $1
+        `,
+        [data.estado_alumno_id]
+      );
+
+    if (!estadoResult.rows.length) {
+      throw new Error(
+        'El estado del alumno seleccionado no existe.'
+      );
+    }
+
+    // ========================================================
+    // VALIDAR MÁQUINAS
+    // ========================================================
+
+    const maquinasIds =
+      data.maquinas.map(
+        maquina =>
+          Number(maquina.maquina_id)
+      );
+
+    const maquinasUnicas =
+      new Set(maquinasIds);
+
+    if (
+      maquinasUnicas.size !==
+      maquinasIds.length
+    ) {
+      throw new Error(
+        'No puede registrar la misma máquina más de una vez.'
+      );
+    }
+
+    for (
+      const maquina
+      of data.maquinas
+    ) {
+
+      if (!maquina.maquina_id) {
+        throw new Error(
+          'Existe una máquina sin ID.'
+        );
+      }
+
+      if (
+        Number(
+          maquina.horas_asignadas
+        ) <= 0
+      ) {
+        throw new Error(
+          `Las horas asignadas para la máquina ${maquina.maquina_id} deben ser mayores a 0.`
+        );
+      }
+
+      if (
+        Number(
+          maquina.sesiones_totales
+        ) <= 0
+      ) {
+        throw new Error(
+          `Las sesiones totales para la máquina ${maquina.maquina_id} deben ser mayores a 0.`
+        );
+      }
+
+      const maquinaResult =
+        await client.query(
+          `
+          SELECT
+            id,
+            nombre,
+            activo
+          FROM maquinas
+          WHERE id = $1
+          `,
+          [maquina.maquina_id]
+        );
+
+      if (!maquinaResult.rows.length) {
+        throw new Error(
+          `La máquina ID ${maquina.maquina_id} no existe.`
+        );
+      }
+
+      if (
+        !maquinaResult.rows[0].activo
+      ) {
+        throw new Error(
+          `La máquina "${maquinaResult.rows[0].nombre}" está inactiva.`
+        );
+      }
+    }
+
+    // ========================================================
+    // VALIDAR MONTOS
+    // ========================================================
+
+    const montoMatricula =
+      Number(
+        data.pago.monto_matricula || 0
+      );
+
+    const montoCertificacion =
+      Number(
+        data.pago.monto_certificacion || 0
+      );
+
+    if (
+      !Number.isFinite(
+        montoMatricula
+      ) ||
+      montoMatricula < 0
+    ) {
+      throw new Error(
+        'El monto de matrícula no es válido.'
+      );
+    }
+
+    if (
+      !Number.isFinite(
+        montoCertificacion
+      ) ||
+      montoCertificacion < 0
+    ) {
+      throw new Error(
+        'El monto de certificación no es válido.'
+      );
+    }
+
+    // ========================================================
+    // VALIDAR CUOTAS
+    // ========================================================
+
+    const numerosCuotas =
+      new Set<number>();
+
+    let totalCuotas = 0;
+
+    for (
+      const cuota
+      of data.pago.cuotas
+    ) {
+
+      const numeroCuota =
+        Number(
+          cuota.numero_cuota
+        );
+
+      const monto =
+        Number(
+          cuota.monto
+        );
+
+      if (
+        !Number.isInteger(
+          numeroCuota
+        ) ||
+        numeroCuota <= 0
+      ) {
+        throw new Error(
+          'Cada cuota debe tener un número entero mayor a 0.'
+        );
+      }
+
+      if (
+        numerosCuotas.has(
+          numeroCuota
+        )
+      ) {
+        throw new Error(
+          `La cuota ${numeroCuota} está repetida.`
+        );
+      }
+
+      numerosCuotas.add(
+        numeroCuota
+      );
+
+      if (
+        !Number.isFinite(monto) ||
+        monto <= 0
+      ) {
+        throw new Error(
+          `El monto de la cuota ${numeroCuota} debe ser mayor a 0.`
+        );
+      }
+
+      const fechaProgramada =
+        normalizarFecha(
+          cuota.fecha_programada
+        );
+
+      const fechaVencimiento =
+        normalizarFecha(
+          cuota.fecha_vencimiento
+        );
+
+      if (!fechaProgramada) {
+        throw new Error(
+          `La fecha programada de la cuota ${numeroCuota} no es válida.`
+        );
+      }
+
+      if (!fechaVencimiento) {
+        throw new Error(
+          `La fecha de vencimiento de la cuota ${numeroCuota} no es válida.`
+        );
+      }
+
+      totalCuotas += monto;
+    }
+
+    // ========================================================
+    // ORDENAR Y VALIDAR SECUENCIA
+    // ========================================================
+
+    const numerosOrdenados =
+      Array.from(
+        numerosCuotas
+      ).sort(
+        (a, b) => a - b
+      );
+
+    numerosOrdenados.forEach(
+      (numero, index) => {
+
+        const esperado =
+          index + 1;
+
+        if (
+          numero !== esperado
+        ) {
+          throw new Error(
+            `Las cuotas deben estar numeradas consecutivamente. Se esperaba la cuota ${esperado}.`
+          );
+        }
+
+      }
+    );
+
+    // ========================================================
+    // TOTAL REAL
+    // ========================================================
+
+    const montoTotal =
+      montoMatricula +
+      totalCuotas +
+      montoCertificacion;
+
+    // ========================================================
+    // INSERTAR MATRÍCULA
+    // ========================================================
+
+    const matriculaResult =
+      await client.query(
+        `
+        INSERT INTO matriculas (
+          alumno_id,
+          plan_curso_id,
+          estado_alumno_id,
+          fecha_matricula,
+          fecha_inicio,
+          fecha_fin_estimada,
+          cronograma_url,
+          notas,
+          activo,
+          tipo_matricula,
+          nombre_curso_manual
+        )
+        VALUES (
+          $1,
+          NULL,
+          $2,
+          $3,
+          $4,
+          $5,
+          NULL,
+          $6,
+          TRUE,
+          'ACELERADA',
+          $7
+        )
+        RETURNING *
+        `,
+        [
+          data.alumno_id,
+          data.estado_alumno_id,
+          fechaMatricula,
+          fechaInicio,
+          fechaFinEstimada,
+          data.notas || null,
+          data.nombre_curso_manual.trim()
+        ]
+      );
+
+    const nuevaMatricula =
+      matriculaResult.rows[0];
+
+    const matriculaId =
+      nuevaMatricula.id;
+
+    // ========================================================
+    // HISTORIAL
+    // ========================================================
+
+    await registrarHistorial(
+      client,
+      {
+        matricula_id:
+          matriculaId,
+
+        accion:
+          'CREACION',
+
+        descripcion:
+          `Matrícula acelerada creada. Curso: ${data.nombre_curso_manual.trim()}`
+      },
+      user
+    );
+
+    // ========================================================
+    // MÁQUINAS
+    // ========================================================
+
+    const nombresMaquinas: string[] = [];
+
+    for (
+      const maquina
+      of data.maquinas
+    ) {
+
+      const maquinaResult =
+        await client.query(
+          `
+          SELECT nombre
+          FROM maquinas
+          WHERE id = $1
+          `,
+          [
+            maquina.maquina_id
+          ]
+        );
+
+      const nombreMaquina =
+        maquinaResult.rows[0]?.nombre;
+
+      if (nombreMaquina) {
+        nombresMaquinas.push(
+          nombreMaquina
+        );
+      }
+
+      // ======================================================
+      // MATRÍCULA-MÁQUINA
+      // ======================================================
+
+      const matriculaMaquinaResult =
+        await client.query(
+          `
+          INSERT INTO matricula_maquinas (
+            matricula_id,
+            maquina_id,
+            orden,
+            es_regalo,
+            horas_asignadas,
+            sesiones_totales
+          )
+          VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6
+          )
+          RETURNING id
+          `,
+          [
+            matriculaId,
+            maquina.maquina_id,
+            maquina.orden,
+            maquina.es_regalo ?? false,
+            Number(
+              maquina.horas_asignadas
+            ),
+            Number(
+              maquina.sesiones_totales
+            )
+          ]
+        );
+
+      const matriculaMaquinaId =
+        matriculaMaquinaResult
+          .rows[0]
+          .id;
+
+      // ======================================================
+      // ASIGNACIÓN PRÁCTICA
+      // ======================================================
+
+      await client.query(
+        `
+        INSERT INTO practicas_asignaciones (
+          matricula_maquina_id,
+          fecha_inicio,
+          sesiones_totales,
+          sesiones_completadas,
+          estado,
+          observaciones
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          0,
+          'PENDIENTE',
+          $4
+        )
+        `,
+        [
+          matriculaMaquinaId,
+
+          fechaInicio ||
+          fechaMatricula,
+
+          Number(
+            maquina.sesiones_totales
+          ),
+
+          'Asignación práctica - Curso acelerado'
+        ]
+      );
+    }
+
+    // ========================================================
+    // CONCEPTOS DE COBRO
+    // ========================================================
+
+    const conceptoMatricula =
+      await obtenerConceptoCobroPorCodigo(
+        client,
+        'MATRICULA'
+      );
+
+    const conceptoCuota =
+      await obtenerConceptoCobroPorCodigo(
+        client,
+        'CUOTA'
+      );
+
+    const conceptoCertificacion =
+      await obtenerConceptoCobroPorCodigo(
+        client,
+        'CERTIFICACION'
+      );
+
+    if (
+      !conceptoMatricula ||
+      !conceptoCuota ||
+      !conceptoCertificacion
+    ) {
+      throw new Error(
+        'Faltan conceptos de cobro base.'
+      );
+    }
+
+    // ========================================================
+    // PLAN DE PAGO
+    // ========================================================
+
+    const planPagoAlumno =
+      await insertarPlanPagoAlumno(
+        client,
+        {
+          matricula_id:
+            matriculaId,
+
+          // ACELERADA:
+          // no tiene plan de precios
+          plan_precio_id:
+            null,
+
+          monto_total:
+            montoTotal,
+
+          monto_matricula:
+            montoMatricula,
+
+          monto_certificacion:
+            montoCertificacion,
+
+          cantidad_cuotas:
+            data.pago.cuotas.length,
+
+          // Las cuotas pueden tener
+          // diferentes montos
+          monto_cuota:
+            null,
+
+          nota_pago:
+            `Curso acelerado: ${data.nombre_curso_manual.trim()} - Máquinas: ${nombresMaquinas.join(', ')}`,
+
+          // La columna actualmente
+          // exige MENSUAL/QUINCENAL.
+          // No genera fechas.
+          modalidad_pago:
+            'MENSUAL'
+        }
+      );
+
+    // ========================================================
+    // CUOTA DE MATRÍCULA
+    // ========================================================
+
+    if (
+      montoMatricula > 0
+    ) {
+
+      const fechaPagoMatricula =
+        normalizarFecha(
+          data.pago.fecha_matricula
+        ) ||
+        fechaMatricula;
+
+      await insertarCuota(
+        client,
+        {
+          plan_pago_alumno_id:
+            planPagoAlumno.id,
+
+          numero_cuota:
+            0,
+
+          concepto_id:
+            conceptoMatricula.id,
+
+          fecha_programada:
+            fechaPagoMatricula,
+
+          fecha_vencimiento:
+            fechaPagoMatricula,
+
+          monto_programado:
+            montoMatricula,
+
+          observaciones:
+            'Pago de matrícula - Curso acelerado'
+        }
+      );
+    }
+
+    // ========================================================
+    // CUOTAS MANUALES
+    // ========================================================
+
+    for (
+      const cuota
+      of data.pago.cuotas
+    ) {
+
+      const fechaProgramada =
+        normalizarFecha(
+          cuota.fecha_programada
+        );
+
+      const fechaVencimiento =
+        normalizarFecha(
+          cuota.fecha_vencimiento
+        );
+
+      await insertarCuota(
+        client,
+        {
+          plan_pago_alumno_id:
+            planPagoAlumno.id,
+
+          numero_cuota:
+            Number(
+              cuota.numero_cuota
+            ),
+
+          concepto_id:
+            conceptoCuota.id,
+
+          fecha_programada:
+            fechaProgramada,
+
+          fecha_vencimiento:
+            fechaVencimiento,
+
+          monto_programado:
+            Number(
+              cuota.monto
+            ),
+
+          observaciones:
+            `Cuota ${cuota.numero_cuota} - Curso acelerado`
+        }
+      );
+    }
+
+    // ========================================================
+    // CERTIFICACIÓN MANUAL
+    // ========================================================
+
+    if (
+      montoCertificacion > 0
+    ) {
+
+      const fechaCertificacion =
+        normalizarFecha(
+          data.pago.fecha_certificacion
+        );
+
+      if (!fechaCertificacion) {
+        throw new Error(
+          'Debe indicar la fecha de certificación.'
+        );
+      }
+
+      await insertarCuota(
+        client,
+        {
+          plan_pago_alumno_id:
+            planPagoAlumno.id,
+
+          numero_cuota:
+            null,
+
+          concepto_id:
+            conceptoCertificacion.id,
+
+          fecha_programada:
+            fechaCertificacion,
+
+          fecha_vencimiento:
+            fechaCertificacion,
+
+          monto_programado:
+            montoCertificacion,
+
+          observaciones:
+            'Carpeta y certificación - Curso acelerado'
+        }
+      );
+    }
+
+    // ========================================================
+    // COMMIT
+    // ========================================================
+
+    await client.query(
+      'COMMIT'
+    );
+
+    // ========================================================
+    // RESPUESTA
+    // ========================================================
+
+    return {
+      ...nuevaMatricula,
+
+      tipo_matricula:
+        'ACELERADA',
+
+      nombre_curso_manual:
+        data.nombre_curso_manual.trim(),
+
+      monto_total:
+        montoTotal,
+
+      monto_matricula:
+        montoMatricula,
+
+      monto_certificacion:
+        montoCertificacion,
+
+      total_cuotas:
+        totalCuotas,
+
+      cantidad_cuotas:
+        data.pago.cuotas.length,
+
+      nombres_maquinas:
+        nombresMaquinas
+    };
+
+  } catch (error) {
+
+    await client.query(
+      'ROLLBACK'
+    );
+
+    throw error;
+
+  } finally {
+
+    client.release();
+
+  }
+}
 // ==========================================================
 // EXPORTS
 // ==========================================================
@@ -9305,7 +10126,9 @@ module.exports = {
 
   previsualizarPlanPago,
 
-  eliminarMatriculaCompleta
+  eliminarMatriculaCompleta,
+
+  crearMatriculaAcelerada
   
 
 };
