@@ -142,7 +142,6 @@ router.delete(
 
 router.put(
   '/cuotas/:id/monto',
-  authMiddleware,
   pagosController.editarMontoCuota
 );
 module.exports = router;
