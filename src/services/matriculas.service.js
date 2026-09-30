@@ -9227,11 +9227,11 @@ async function eliminarMatriculaCompleta(
 }
 // ============================================================
 // CREAR MATRÍCULA ACELERADA
+// ============================================================// ============================================================
+// CREAR MATRÍCULA ACELERADA
 // ============================================================
-async function crearMatriculaAcelerada(
-  data: CrearMatriculaAceleradaInput,
-  user: any
-) {
+
+async function crearMatriculaAcelerada(data, user) {
   const client = await pool.connect();
 
   try {
@@ -9241,7 +9241,7 @@ async function crearMatriculaAcelerada(
     // VALIDACIONES BÁSICAS
     // ========================================================
 
-    if (!data.alumno_id) {
+    if (!data || !data.alumno_id) {
       throw new Error(
         'El alumno es obligatorio.'
       );
@@ -9297,19 +9297,13 @@ async function crearMatriculaAcelerada(
     // ========================================================
 
     const fechaMatricula =
-      normalizarFecha(
-        data.fecha_matricula
-      );
+      normalizarFecha(data.fecha_matricula);
 
     const fechaInicio =
-      normalizarFecha(
-        data.fecha_inicio
-      );
+      normalizarFecha(data.fecha_inicio);
 
     const fechaFinEstimada =
-      normalizarFecha(
-        data.fecha_fin_estimada
-      );
+      normalizarFecha(data.fecha_fin_estimada);
 
     if (!fechaMatricula) {
       throw new Error(
@@ -9321,15 +9315,14 @@ async function crearMatriculaAcelerada(
     // VALIDAR ALUMNO
     // ========================================================
 
-    const alumnoResult =
-      await client.query(
-        `
-        SELECT id
-        FROM alumnos
-        WHERE id = $1
-        `,
-        [data.alumno_id]
-      );
+    const alumnoResult = await client.query(
+      `
+      SELECT id
+      FROM alumnos
+      WHERE id = $1
+      `,
+      [data.alumno_id]
+    );
 
     if (!alumnoResult.rows.length) {
       throw new Error(
@@ -9341,15 +9334,14 @@ async function crearMatriculaAcelerada(
     // VALIDAR ESTADO
     // ========================================================
 
-    const estadoResult =
-      await client.query(
-        `
-        SELECT id
-        FROM estados_alumno
-        WHERE id = $1
-        `,
-        [data.estado_alumno_id]
-      );
+    const estadoResult = await client.query(
+      `
+      SELECT id
+      FROM estados_alumno
+      WHERE id = $1
+      `,
+      [data.estado_alumno_id]
+    );
 
     if (!estadoResult.rows.length) {
       throw new Error(
@@ -9361,14 +9353,11 @@ async function crearMatriculaAcelerada(
     // VALIDAR MÁQUINAS
     // ========================================================
 
-    const maquinasIds =
-      data.maquinas.map(
-        maquina =>
-          Number(maquina.maquina_id)
-      );
+    const maquinasIds = data.maquinas.map(
+      maquina => Number(maquina.maquina_id)
+    );
 
-    const maquinasUnicas =
-      new Set(maquinasIds);
+    const maquinasUnicas = new Set(maquinasIds);
 
     if (
       maquinasUnicas.size !==
@@ -9379,21 +9368,22 @@ async function crearMatriculaAcelerada(
       );
     }
 
-    for (
-      const maquina
-      of data.maquinas
-    ) {
-
+    for (const maquina of data.maquinas) {
       if (!maquina.maquina_id) {
         throw new Error(
           'Existe una máquina sin ID.'
         );
       }
 
+      const horasAsignadas =
+        Number(maquina.horas_asignadas);
+
+      const sesionesTotales =
+        Number(maquina.sesiones_totales);
+
       if (
-        Number(
-          maquina.horas_asignadas
-        ) <= 0
+        !Number.isFinite(horasAsignadas) ||
+        horasAsignadas <= 0
       ) {
         throw new Error(
           `Las horas asignadas para la máquina ${maquina.maquina_id} deben ser mayores a 0.`
@@ -9401,12 +9391,11 @@ async function crearMatriculaAcelerada(
       }
 
       if (
-        Number(
-          maquina.sesiones_totales
-        ) <= 0
+        !Number.isInteger(sesionesTotales) ||
+        sesionesTotales <= 0
       ) {
         throw new Error(
-          `Las sesiones totales para la máquina ${maquina.maquina_id} deben ser mayores a 0.`
+          `Las sesiones totales para la máquina ${maquina.maquina_id} deben ser un número entero mayor a 0.`
         );
       }
 
@@ -9429,9 +9418,7 @@ async function crearMatriculaAcelerada(
         );
       }
 
-      if (
-        !maquinaResult.rows[0].activo
-      ) {
+      if (!maquinaResult.rows[0].activo) {
         throw new Error(
           `La máquina "${maquinaResult.rows[0].nombre}" está inactiva.`
         );
@@ -9443,19 +9430,13 @@ async function crearMatriculaAcelerada(
     // ========================================================
 
     const montoMatricula =
-      Number(
-        data.pago.monto_matricula || 0
-      );
+      Number(data.pago.monto_matricula || 0);
 
     const montoCertificacion =
-      Number(
-        data.pago.monto_certificacion || 0
-      );
+      Number(data.pago.monto_certificacion || 0);
 
     if (
-      !Number.isFinite(
-        montoMatricula
-      ) ||
+      !Number.isFinite(montoMatricula) ||
       montoMatricula < 0
     ) {
       throw new Error(
@@ -9464,9 +9445,7 @@ async function crearMatriculaAcelerada(
     }
 
     if (
-      !Number.isFinite(
-        montoCertificacion
-      ) ||
+      !Number.isFinite(montoCertificacion) ||
       montoCertificacion < 0
     ) {
       throw new Error(
@@ -9475,33 +9454,35 @@ async function crearMatriculaAcelerada(
     }
 
     // ========================================================
+    // VALIDAR FECHA DE MATRÍCULA DEL PAGO
+    // ========================================================
+
+    let fechaPagoMatricula = null;
+
+    if (montoMatricula > 0) {
+      fechaPagoMatricula =
+        normalizarFecha(
+          data.pago.fecha_matricula
+        ) || fechaMatricula;
+    }
+
+    // ========================================================
     // VALIDAR CUOTAS
     // ========================================================
 
-    const numerosCuotas =
-      new Set<number>();
+    const numerosCuotas = new Set();
 
     let totalCuotas = 0;
 
-    for (
-      const cuota
-      of data.pago.cuotas
-    ) {
-
+    for (const cuota of data.pago.cuotas) {
       const numeroCuota =
-        Number(
-          cuota.numero_cuota
-        );
+        Number(cuota.numero_cuota);
 
       const monto =
-        Number(
-          cuota.monto
-        );
+        Number(cuota.monto);
 
       if (
-        !Number.isInteger(
-          numeroCuota
-        ) ||
+        !Number.isInteger(numeroCuota) ||
         numeroCuota <= 0
       ) {
         throw new Error(
@@ -9509,19 +9490,13 @@ async function crearMatriculaAcelerada(
         );
       }
 
-      if (
-        numerosCuotas.has(
-          numeroCuota
-        )
-      ) {
+      if (numerosCuotas.has(numeroCuota)) {
         throw new Error(
           `La cuota ${numeroCuota} está repetida.`
         );
       }
 
-      numerosCuotas.add(
-        numeroCuota
-      );
+      numerosCuotas.add(numeroCuota);
 
       if (
         !Number.isFinite(monto) ||
@@ -9558,32 +9533,44 @@ async function crearMatriculaAcelerada(
     }
 
     // ========================================================
-    // ORDENAR Y VALIDAR SECUENCIA
+    // VALIDAR SECUENCIA DE CUOTAS
     // ========================================================
 
     const numerosOrdenados =
-      Array.from(
-        numerosCuotas
-      ).sort(
+      Array.from(numerosCuotas).sort(
         (a, b) => a - b
       );
 
     numerosOrdenados.forEach(
       (numero, index) => {
+        const esperado = index + 1;
 
-        const esperado =
-          index + 1;
-
-        if (
-          numero !== esperado
-        ) {
+        if (numero !== esperado) {
           throw new Error(
             `Las cuotas deben estar numeradas consecutivamente. Se esperaba la cuota ${esperado}.`
           );
         }
-
       }
     );
+
+    // ========================================================
+    // VALIDAR FECHA DE CERTIFICACIÓN
+    // ========================================================
+
+    let fechaCertificacion = null;
+
+    if (montoCertificacion > 0) {
+      fechaCertificacion =
+        normalizarFecha(
+          data.pago.fecha_certificacion
+        );
+
+      if (!fechaCertificacion) {
+        throw new Error(
+          'Debe indicar la fecha de certificación.'
+        );
+      }
+    }
 
     // ========================================================
     // TOTAL REAL
@@ -9653,12 +9640,8 @@ async function crearMatriculaAcelerada(
     await registrarHistorial(
       client,
       {
-        matricula_id:
-          matriculaId,
-
-        accion:
-          'CREACION',
-
+        matricula_id: matriculaId,
+        accion: 'CREACION',
         descripcion:
           `Matrícula acelerada creada. Curso: ${data.nombre_curso_manual.trim()}`
       },
@@ -9669,13 +9652,9 @@ async function crearMatriculaAcelerada(
     // MÁQUINAS
     // ========================================================
 
-    const nombresMaquinas: string[] = [];
+    const nombresMaquinas = [];
 
-    for (
-      const maquina
-      of data.maquinas
-    ) {
-
+    for (const maquina of data.maquinas) {
       const maquinaResult =
         await client.query(
           `
@@ -9683,9 +9662,7 @@ async function crearMatriculaAcelerada(
           FROM maquinas
           WHERE id = $1
           `,
-          [
-            maquina.maquina_id
-          ]
+          [maquina.maquina_id]
         );
 
       const nombreMaquina =
@@ -9698,7 +9675,7 @@ async function crearMatriculaAcelerada(
       }
 
       // ======================================================
-      // MATRÍCULA-MÁQUINA
+      // INSERTAR MATRÍCULA-MÁQUINA
       // ======================================================
 
       const matriculaMaquinaResult =
@@ -9725,24 +9702,18 @@ async function crearMatriculaAcelerada(
           [
             matriculaId,
             maquina.maquina_id,
-            maquina.orden,
+            Number(maquina.orden || 1),
             maquina.es_regalo ?? false,
-            Number(
-              maquina.horas_asignadas
-            ),
-            Number(
-              maquina.sesiones_totales
-            )
+            Number(maquina.horas_asignadas),
+            Number(maquina.sesiones_totales)
           ]
         );
 
       const matriculaMaquinaId =
-        matriculaMaquinaResult
-          .rows[0]
-          .id;
+        matriculaMaquinaResult.rows[0].id;
 
       // ======================================================
-      // ASIGNACIÓN PRÁCTICA
+      // INSERTAR ASIGNACIÓN PRÁCTICA
       // ======================================================
 
       await client.query(
@@ -9766,14 +9737,8 @@ async function crearMatriculaAcelerada(
         `,
         [
           matriculaMaquinaId,
-
-          fechaInicio ||
-          fechaMatricula,
-
-          Number(
-            maquina.sesiones_totales
-          ),
-
+          fechaInicio || fechaMatricula,
+          Number(maquina.sesiones_totales),
           'Asignación práctica - Curso acelerado'
         ]
       );
@@ -9812,26 +9777,22 @@ async function crearMatriculaAcelerada(
     }
 
     // ========================================================
-    // PLAN DE PAGO
+    // CREAR PLAN DE PAGO
     // ========================================================
 
     const planPagoAlumno =
       await insertarPlanPagoAlumno(
         client,
         {
-          matricula_id:
-            matriculaId,
+          matricula_id: matriculaId,
 
-          // ACELERADA:
-          // no tiene plan de precios
-          plan_precio_id:
-            null,
+          // Curso acelerado:
+          // no utiliza plan de precios.
+          plan_precio_id: null,
 
-          monto_total:
-            montoTotal,
+          monto_total: montoTotal,
 
-          monto_matricula:
-            montoMatricula,
+          monto_matricula: montoMatricula,
 
           monto_certificacion:
             montoCertificacion,
@@ -9839,19 +9800,17 @@ async function crearMatriculaAcelerada(
           cantidad_cuotas:
             data.pago.cuotas.length,
 
-          // Las cuotas pueden tener
-          // diferentes montos
-          monto_cuota:
-            null,
+          // Cada cuota puede tener
+          // un monto diferente.
+          monto_cuota: null,
 
           nota_pago:
             `Curso acelerado: ${data.nombre_curso_manual.trim()} - Máquinas: ${nombresMaquinas.join(', ')}`,
 
-          // La columna actualmente
-          // exige MENSUAL/QUINCENAL.
-          // No genera fechas.
-          modalidad_pago:
-            'MENSUAL'
+          // La tabla actualmente permite
+          // MENSUAL / QUINCENAL.
+          // Aquí NO se generan fechas automáticamente.
+          modalidad_pago: 'MENSUAL'
         }
       );
 
@@ -9859,24 +9818,14 @@ async function crearMatriculaAcelerada(
     // CUOTA DE MATRÍCULA
     // ========================================================
 
-    if (
-      montoMatricula > 0
-    ) {
-
-      const fechaPagoMatricula =
-        normalizarFecha(
-          data.pago.fecha_matricula
-        ) ||
-        fechaMatricula;
-
+    if (montoMatricula > 0) {
       await insertarCuota(
         client,
         {
           plan_pago_alumno_id:
             planPagoAlumno.id,
 
-          numero_cuota:
-            0,
+          numero_cuota: 0,
 
           concepto_id:
             conceptoMatricula.id,
@@ -9900,11 +9849,7 @@ async function crearMatriculaAcelerada(
     // CUOTAS MANUALES
     // ========================================================
 
-    for (
-      const cuota
-      of data.pago.cuotas
-    ) {
-
+    for (const cuota of data.pago.cuotas) {
       const fechaProgramada =
         normalizarFecha(
           cuota.fecha_programada
@@ -9922,9 +9867,7 @@ async function crearMatriculaAcelerada(
             planPagoAlumno.id,
 
           numero_cuota:
-            Number(
-              cuota.numero_cuota
-            ),
+            Number(cuota.numero_cuota),
 
           concepto_id:
             conceptoCuota.id,
@@ -9936,9 +9879,7 @@ async function crearMatriculaAcelerada(
             fechaVencimiento,
 
           monto_programado:
-            Number(
-              cuota.monto
-            ),
+            Number(cuota.monto),
 
           observaciones:
             `Cuota ${cuota.numero_cuota} - Curso acelerado`
@@ -9950,29 +9891,14 @@ async function crearMatriculaAcelerada(
     // CERTIFICACIÓN MANUAL
     // ========================================================
 
-    if (
-      montoCertificacion > 0
-    ) {
-
-      const fechaCertificacion =
-        normalizarFecha(
-          data.pago.fecha_certificacion
-        );
-
-      if (!fechaCertificacion) {
-        throw new Error(
-          'Debe indicar la fecha de certificación.'
-        );
-      }
-
+    if (montoCertificacion > 0) {
       await insertarCuota(
         client,
         {
           plan_pago_alumno_id:
             planPagoAlumno.id,
 
-          numero_cuota:
-            null,
+          numero_cuota: null,
 
           concepto_id:
             conceptoCertificacion.id,
@@ -9996,9 +9922,7 @@ async function crearMatriculaAcelerada(
     // COMMIT
     // ========================================================
 
-    await client.query(
-      'COMMIT'
-    );
+    await client.query('COMMIT');
 
     // ========================================================
     // RESPUESTA
@@ -10007,23 +9931,19 @@ async function crearMatriculaAcelerada(
     return {
       ...nuevaMatricula,
 
-      tipo_matricula:
-        'ACELERADA',
+      tipo_matricula: 'ACELERADA',
 
       nombre_curso_manual:
         data.nombre_curso_manual.trim(),
 
-      monto_total:
-        montoTotal,
+      monto_total: montoTotal,
 
-      monto_matricula:
-        montoMatricula,
+      monto_matricula: montoMatricula,
 
       monto_certificacion:
         montoCertificacion,
 
-      total_cuotas:
-        totalCuotas,
+      total_cuotas: totalCuotas,
 
       cantidad_cuotas:
         data.pago.cuotas.length,
@@ -10033,17 +9953,11 @@ async function crearMatriculaAcelerada(
     };
 
   } catch (error) {
-
-    await client.query(
-      'ROLLBACK'
-    );
-
+    await client.query('ROLLBACK');
     throw error;
 
   } finally {
-
     client.release();
-
   }
 }
 // ==========================================================
