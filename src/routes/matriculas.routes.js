@@ -84,4 +84,10 @@ router.put(
   controller.actualizar
 );
 
+router.post(
+  '/acelerada',
+  authMiddleware,
+  controller.crearMatriculaAceleradaController
+);
+
 module.exports = router;
