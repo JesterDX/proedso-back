@@ -388,7 +388,6 @@ async function listarPagos(filtros = {}) {
 // ============================================================
 // RESUMEN DE PAGOS
 // ============================================================
-
 async function listarResumenPagos() {
 
   const result = await pool.query(`
@@ -405,7 +404,18 @@ async function listarResumenPagos() {
 
       a.foto_url,
 
-      pc.nombre AS plan_nombre,
+      CASE
+        WHEN m.tipo_matricula = 'ACELERADA'
+          THEN COALESCE(
+            m.nombre_curso_manual,
+            'Curso acelerado'
+          )
+
+        ELSE COALESCE(
+          pc.nombre,
+          'Sin plan de curso'
+        )
+      END AS plan_nombre,
 
       m.fecha_matricula,
       m.fecha_inicio,
@@ -474,7 +484,7 @@ async function listarResumenPagos() {
     INNER JOIN alumnos a
       ON a.id = m.alumno_id
 
-    INNER JOIN planes_curso pc
+    LEFT JOIN planes_curso pc
       ON pc.id = m.plan_curso_id
 
     GROUP BY
@@ -486,6 +496,8 @@ async function listarResumenPagos() {
       a.apellidos,
       a.foto_url,
       pc.nombre,
+      m.tipo_matricula,
+      m.nombre_curso_manual,
       m.fecha_matricula,
       m.fecha_inicio
 
@@ -495,8 +507,6 @@ async function listarResumenPagos() {
 
   return result.rows;
 }
-
-
 // ============================================================
 // HISTORIAL DE PAGOS
 // ============================================================
