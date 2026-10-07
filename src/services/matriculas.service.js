@@ -1499,73 +1499,103 @@ if (cambioMaquinas) {
 // ==========================================================
 // OBTENER DETALLE DE MATRÍCULA
 // ==========================================================
+async function obtenerDetalleMatricula(id) {
+  const result = await pool.query(
+    `
+    SELECT
+      m.id,
+      m.alumno_id,
+      m.plan_curso_id,
+      m.estado_alumno_id,
+      m.fecha_matricula,
+      m.fecha_inicio,
+      m.fecha_fin_estimada,
+      m.cronograma_url,
+      m.notas,
+      m.activo,
+      m.fecha_creacion,
+      m.tipo_matricula,
+      m.nombre_curso_manual,
 
-async function obtenerDetalleMatricula(
-  id
-) {
+      -- ==========================================================
+      -- ALUMNO
+      -- ==========================================================
 
-  const result =
-    await pool.query(
-      `
-      SELECT
-        m.id,
-        m.alumno_id,
-        m.plan_curso_id,
-        m.estado_alumno_id,
-        m.fecha_matricula,
-        m.fecha_inicio,
-        m.fecha_fin_estimada,
-        m.cronograma_url,
-        m.notas,
-        m.activo,
-        m.fecha_creacion,
+      a.numero_documento AS alumno_dni,
+      a.nombres AS alumno_nombres,
+      a.apellidos AS alumno_apellidos,
+      a.fecha_nacimiento AS alumno_fecha_nacimiento,
+      a.telefono AS alumno_telefono,
+      a.correo AS alumno_correo,
+      a.direccion AS alumno_direccion,
+      a.foto_url AS alumno_foto_url,
+      a.observaciones AS alumno_observaciones,
+      a.seguro_alumno AS alumno_seguro_alumno,
 
-        a.numero_documento AS alumno_dni,
-        a.nombres AS alumno_nombres,
-        a.apellidos AS alumno_apellidos,
-        a.fecha_nacimiento AS alumno_fecha_nacimiento,
-        a.telefono AS alumno_telefono,
-        a.correo AS alumno_correo,
-        a.direccion AS alumno_direccion,
-        a.foto_url AS alumno_foto_url,
-        a.observaciones AS alumno_observaciones,
-        a.seguro_alumno AS alumno_seguro_alumno,
+      -- ==========================================================
+      -- PLAN DE CURSO
+      -- Puede ser NULL en matrículas ACELERADAS
+      -- ==========================================================
 
-        pc.codigo AS plan_codigo,
-        pc.nombre AS plan_nombre,
-        pc.permite_eleccion_personalizada,
+      pc.codigo AS plan_codigo,
+      pc.nombre AS plan_nombre,
+      pc.permite_eleccion_personalizada,
 
-        tc.codigo AS tipo_curso_codigo,
-        tc.nombre AS tipo_curso_nombre,
-        tc.cantidad_maquinas,
+      -- ==========================================================
+      -- TIPO DE CURSO
+      -- Puede ser NULL en matrículas ACELERADAS
+      -- ==========================================================
 
-        ea.codigo AS estado_codigo,
-        ea.nombre AS estado_nombre
+      tc.codigo AS tipo_curso_codigo,
+      tc.nombre AS tipo_curso_nombre,
+      tc.cantidad_maquinas,
 
-      FROM matriculas m
+      -- ==========================================================
+      -- ESTADO
+      -- ==========================================================
 
-      INNER JOIN alumnos a
-        ON a.id = m.alumno_id
+      ea.codigo AS estado_codigo,
+      ea.nombre AS estado_nombre,
 
-      INNER JOIN planes_curso pc
-        ON pc.id = m.plan_curso_id
+      -- ==========================================================
+      -- NOMBRE FINAL DEL CURSO
+      --
+      -- Matrícula normal:
+      --     planes_curso.nombre
+      --
+      -- Matrícula acelerada:
+      --     matriculas.nombre_curso_manual
+      -- ==========================================================
 
-      INNER JOIN tipos_curso tc
-        ON tc.id = pc.tipo_curso_id
+      CASE
+        WHEN m.tipo_matricula = 'ACELERADA'
+          THEN m.nombre_curso_manual
+        ELSE pc.nombre
+      END AS nombre_curso
 
-      INNER JOIN estados_alumno ea
-        ON ea.id = m.estado_alumno_id
+    FROM matriculas m
 
-      WHERE m.id = $1
+    INNER JOIN alumnos a
+      ON a.id = m.alumno_id
 
-      LIMIT 1
-      `,
-      [id]
-    );
+    LEFT JOIN planes_curso pc
+      ON pc.id = m.plan_curso_id
+
+    LEFT JOIN tipos_curso tc
+      ON tc.id = pc.tipo_curso_id
+
+    INNER JOIN estados_alumno ea
+      ON ea.id = m.estado_alumno_id
+
+    WHERE m.id = $1
+
+    LIMIT 1
+    `,
+    [id]
+  );
 
   return result.rows[0] || null;
 }
-
 // ==========================================================
 // LISTAR MÁQUINAS DE MATRÍCULA
 //
