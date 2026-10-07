@@ -4024,6 +4024,179 @@ async function aplicarCambioPlan({
 }
 
 
+
+
+async function agregarCuota({
+  plan_pago_alumno_id,
+  fecha_vencimiento,
+  monto,
+  observaciones = null
+}) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const planId = Number(plan_pago_alumno_id);
+    if (!Number.isInteger(planId)) {
+      throw new Error('plan_pago_alumno_id inválido');
+    }
+
+    if (!fechaValida(fecha_vencimiento)) {
+      throw new Error('Fecha de vencimiento inválida');
+    }
+
+    const montoCuota = validarMontoPositivo(
+      monto,
+      'El monto debe ser mayor a cero'
+    );
+
+    // Bloquear plan
+    const planRes = await client.query(
+      `SELECT id, monto_total, cantidad_cuotas
+       FROM planes_pago_alumno
+       WHERE id = $1
+       FOR UPDATE`,
+      [planId]
+    );
+
+    if (!planRes.rows.length) {
+      throw new Error('Plan de pago no encontrado');
+    }
+
+    const plan = planRes.rows[0];
+    const conceptos = await obtenerConceptosCobro(client);
+
+    // Siguiente número de cuota
+    const maxRes = await client.query(
+      `SELECT COALESCE(MAX(numero_cuota), 0) AS max
+       FROM cuotas
+       WHERE plan_pago_alumno_id = $1 AND concepto_id = $2`,
+      [planId, conceptos.CUOTA]
+    );
+
+    const numero = Number(maxRes.rows[0].max) + 1;
+    const fecha = normalizarFecha(fecha_vencimiento);
+
+    const cuotaRes = await client.query(
+      `INSERT INTO cuotas (
+         plan_pago_alumno_id, numero_cuota, concepto_id,
+         fecha_programada, fecha_vencimiento,
+         monto_programado, monto_pagado, saldo_pendiente,
+         estado, observaciones
+       )
+       VALUES ($1, $2, $3, $4, $4, $5, 0, $5, 'PENDIENTE', $6)
+       RETURNING *`,
+      [planId, numero, conceptos.CUOTA, fecha, montoCuota,
+       observaciones || `Cuota ${numero}`]
+    );
+
+    // Mantener el plan cuadrado con sus cuotas
+    const nuevoTotal = redondear(numeroSeguro(plan.monto_total) + montoCuota);
+    const nuevaCantidad = Number(plan.cantidad_cuotas || 0) + 1;
+
+    await client.query(
+      `UPDATE planes_pago_alumno
+       SET monto_total = $1, cantidad_cuotas = $2
+       WHERE id = $3`,
+      [nuevoTotal, nuevaCantidad, planId]
+    );
+
+    await client.query('COMMIT');
+    return cuotaRes.rows[0];
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+
+// ============================================================
+// ELIMINAR CUOTA
+// ============================================================
+
+async function eliminarCuota(cuota_id) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const cuotaId = Number(cuota_id);
+    if (!Number.isInteger(cuotaId)) {
+      throw new Error('cuota_id inválido');
+    }
+
+    const cuotaRes = await client.query(
+      `SELECT c.id, c.plan_pago_alumno_id, c.monto_programado,
+              c.monto_pagado, cc.codigo AS concepto_codigo
+       FROM cuotas c
+       INNER JOIN conceptos_cobro cc ON cc.id = c.concepto_id
+       WHERE c.id = $1
+       FOR UPDATE OF c`,
+      [cuotaId]
+    );
+
+    if (!cuotaRes.rows.length) {
+      throw new Error('Cuota no encontrada');
+    }
+
+    const cuota = cuotaRes.rows[0];
+
+    if (numeroSeguro(cuota.monto_pagado) > 0) {
+      throw new Error(
+        'No se puede eliminar una cuota con pagos. Elimina primero sus pagos.'
+      );
+    }
+
+    const pagosRes = await client.query(
+      `SELECT 1 FROM pagos WHERE cuota_id = $1 LIMIT 1`,
+      [cuotaId]
+    );
+    if (pagosRes.rows.length) {
+      throw new Error('La cuota tiene pagos registrados');
+    }
+
+    await client.query(`DELETE FROM cuotas WHERE id = $1`, [cuotaId]);
+
+    // Ajustar el plan (solo si es cuota regular)
+    if (cuota.concepto_codigo === 'CUOTA') {
+      await client.query(
+        `UPDATE planes_pago_alumno
+         SET monto_total = GREATEST(monto_total - $1, 0),
+             cantidad_cuotas = GREATEST(cantidad_cuotas - 1, 0)
+         WHERE id = $2`,
+        [redondear(cuota.monto_programado), cuota.plan_pago_alumno_id]
+      );
+    } else {
+      // Matrícula o certificación: también descontar su columna
+      const columna = cuota.concepto_codigo === 'MATRICULA'
+        ? 'monto_matricula'
+        : 'monto_certificacion';
+
+      await client.query(
+        `UPDATE planes_pago_alumno
+         SET monto_total = GREATEST(monto_total - $1, 0),
+             ${columna} = GREATEST(${columna} - $1, 0)
+         WHERE id = $2`,
+        [redondear(cuota.monto_programado), cuota.plan_pago_alumno_id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    return { mensaje: 'Cuota eliminada correctamente', cuota_id: cuotaId };
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 // ============================================================
 // EXPORTS
 // ============================================================
@@ -4054,6 +4227,10 @@ module.exports = {
 
   aplicarCambioPlan,
 
-  editarMontoCuota
+  editarMontoCuota,
+
+  agregarCuota,
+
+  eliminarCuota
 
 };
