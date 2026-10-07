@@ -771,6 +771,139 @@ async function editarMontoCuota(req, res) {
 }
 
 
+
+async function agregarCuota(req, res) {
+
+    try {
+
+        const {
+            plan_pago_alumno_id,
+            fecha_vencimiento,
+            monto,
+            observaciones
+        } = req.body;
+
+
+        if (!plan_pago_alumno_id) {
+
+            return res.status(400).json({
+                ok: false,
+                message: 'plan_pago_alumno_id requerido'
+            });
+        }
+
+
+        if (!fecha_vencimiento) {
+
+            return res.status(400).json({
+                ok: false,
+                message: 'fecha_vencimiento requerida'
+            });
+        }
+
+
+        if (
+            monto === undefined ||
+            monto === null ||
+            monto === ''
+        ) {
+
+            return res.status(400).json({
+                ok: false,
+                message: 'monto requerido'
+            });
+        }
+
+
+        const data =
+            await pagosService.agregarCuota({
+
+                plan_pago_alumno_id,
+
+                fecha_vencimiento,
+
+                monto,
+
+                observaciones
+            });
+
+
+        res.status(201).json({
+
+            ok: true,
+
+            message: 'Cuota agregada correctamente',
+
+            data
+        });
+
+
+    } catch (error) {
+
+        console.error('❌ agregar cuota:', error);
+
+        res.status(400).json({
+
+            ok: false,
+
+            message:
+                error.message ||
+                'Error al agregar cuota'
+        });
+    }
+}
+
+
+// =====================================================
+// ELIMINAR CUOTA
+// =====================================================
+
+async function eliminarCuota(req, res) {
+
+    try {
+
+        const cuotaId = Number(req.params.id);
+
+
+        if (!Number.isInteger(cuotaId)) {
+
+            return res.status(400).json({
+                ok: false,
+                message: 'ID de cuota inválido'
+            });
+        }
+
+
+        const data =
+            await pagosService.eliminarCuota(cuotaId);
+
+
+        res.json({
+
+            ok: true,
+
+            message: data.mensaje,
+
+            data
+        });
+
+
+    } catch (error) {
+
+        console.error('❌ eliminar cuota:', error);
+
+        res.status(400).json({
+
+            ok: false,
+
+            message:
+                error.message ||
+                'Error al eliminar cuota'
+        });
+    }
+}
+
+
 module.exports = {
 
     listar,
@@ -801,6 +934,10 @@ module.exports = {
 
     eliminar,
 
-    editarMontoCuota
+    editarMontoCuota,
+
+    agregarCuota,
+
+    eliminarCuota
 };
 
