@@ -274,113 +274,126 @@ async function listarPagos(filtros = {}) {
   // QUERY
   // ----------------------------------------------------------
 
-  const result = await pool.query(`
-    SELECT
 
-      c.id,
-      c.numero_cuota,
+const result = await pool.query(`
+  SELECT
 
-      c.fecha_programada,
-      c.fecha_vencimiento,
+    c.id,
+    c.numero_cuota,
 
-      c.monto_programado,
-      c.monto_pagado,
-      c.saldo_pendiente,
+    c.fecha_programada,
+    c.fecha_vencimiento,
 
-      c.estado,
-      c.observaciones,
+    c.monto_programado,
+    c.monto_pagado,
+    c.saldo_pendiente,
 
-      cc.codigo AS concepto_codigo,
-      cc.nombre AS concepto_nombre,
+    c.estado,
+    c.observaciones,
 
-      m.id AS matricula_id,
+    cc.codigo AS concepto_codigo,
+    cc.nombre AS concepto_nombre,
 
-      a.id AS alumno_id,
+    m.id AS matricula_id,
 
-      a.numero_documento,
+    a.id AS alumno_id,
 
-      a.nombres || ' ' ||
-      a.apellidos AS alumno,
+    a.numero_documento,
 
-      a.nombres,
-      a.apellidos,
+    a.nombres || ' ' ||
+    a.apellidos AS alumno,
 
-      a.telefono,
-      a.correo,
-      a.foto_url,
+    a.nombres,
+    a.apellidos,
 
-      ppa.id AS plan_pago_alumno_id,
+    a.telefono,
+    a.correo,
+    a.foto_url,
 
-      STRING_AGG(
-        DISTINCT ma.nombre,
-        ', '
-        ORDER BY ma.nombre
-      ) FILTER (
-        WHERE mm.estado = 'PENDIENTE'
-      ) AS maquinas,
+    ppa.id AS plan_pago_alumno_id,
 
-      pc.nombre AS plan_nombre
+    STRING_AGG(
+      DISTINCT ma.nombre,
+      ', '
+      ORDER BY ma.nombre
+    ) FILTER (
+      WHERE mm.estado = 'PENDIENTE'
+    ) AS maquinas,
 
-    FROM cuotas c
+    COALESCE(
+      pc.nombre,
+      CASE
+        WHEN m.tipo_matricula = 'ACELERADA'
+          THEN COALESCE(
+            m.nombre_curso_manual,
+            'Curso acelerado'
+          )
+        ELSE 'Sin plan de curso'
+      END
+    ) AS plan_nombre
 
-    INNER JOIN conceptos_cobro cc
-      ON cc.id = c.concepto_id
+  FROM cuotas c
 
-    INNER JOIN planes_pago_alumno ppa
-      ON ppa.id = c.plan_pago_alumno_id
+  INNER JOIN conceptos_cobro cc
+    ON cc.id = c.concepto_id
 
-    INNER JOIN matriculas m
-      ON m.id = ppa.matricula_id
+  INNER JOIN planes_pago_alumno ppa
+    ON ppa.id = c.plan_pago_alumno_id
 
-    INNER JOIN alumnos a
-      ON a.id = m.alumno_id
+  INNER JOIN matriculas m
+    ON m.id = ppa.matricula_id
 
-    INNER JOIN planes_curso pc
-      ON pc.id = m.plan_curso_id
+  INNER JOIN alumnos a
+    ON a.id = m.alumno_id
 
-    LEFT JOIN matricula_maquinas mm
-      ON mm.matricula_id = m.id
+  LEFT JOIN planes_curso pc
+    ON pc.id = m.plan_curso_id
 
-    LEFT JOIN maquinas ma
-      ON ma.id = mm.maquina_id
+  LEFT JOIN matricula_maquinas mm
+    ON mm.matricula_id = m.id
 
-    ${where}
+  LEFT JOIN maquinas ma
+    ON ma.id = mm.maquina_id
 
-    GROUP BY
+  ${where}
 
-      c.id,
-      c.numero_cuota,
-      c.fecha_programada,
-      c.fecha_vencimiento,
-      c.monto_programado,
-      c.monto_pagado,
-      c.saldo_pendiente,
-      c.estado,
-      c.observaciones,
+  GROUP BY
 
-      cc.codigo,
-      cc.nombre,
+    c.id,
+    c.numero_cuota,
+    c.fecha_programada,
+    c.fecha_vencimiento,
+    c.monto_programado,
+    c.monto_pagado,
+    c.saldo_pendiente,
+    c.estado,
+    c.observaciones,
 
-      m.id,
+    cc.codigo,
+    cc.nombre,
 
-      a.id,
-      a.numero_documento,
-      a.nombres,
-      a.apellidos,
-      a.telefono,
-      a.correo,
-      a.foto_url,
+    m.id,
 
-      ppa.id,
+    a.id,
+    a.numero_documento,
+    a.nombres,
+    a.apellidos,
+    a.telefono,
+    a.correo,
+    a.foto_url,
 
-      pc.nombre
+    ppa.id,
 
-    ORDER BY
-      c.fecha_vencimiento ASC NULLS LAST,
-      c.numero_cuota ASC NULLS LAST,
-      c.id ASC
-  `, values);
+    pc.nombre,
 
+    m.tipo_matricula,
+    m.nombre_curso_manual
+
+  ORDER BY
+    c.fecha_vencimiento ASC NULLS LAST,
+    c.numero_cuota ASC NULLS LAST,
+    c.id ASC
+`, values);
   return result.rows;
 }
 
