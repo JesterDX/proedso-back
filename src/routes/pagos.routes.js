@@ -144,5 +144,19 @@ router.put(
   '/cuotas/:id/monto',
   pagosController.editarMontoCuota
 );
+
+
+// Agregar cuota a un plan
+router.post(
+    '/cuotas',
+    pagosController.agregarCuota
+);
+
+router.delete(
+    '/cuotas/:id',
+    pagosController.eliminarCuota
+);
+
+
 module.exports = router;
 
