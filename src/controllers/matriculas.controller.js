@@ -451,46 +451,52 @@ async function cambiarEstado(req, res) {
     }
 
 
-    // ------------------------------------------------------
-    // CAMBIAR ESTADO
-    // ------------------------------------------------------
+// ------------------------------------------------------
+// CAMBIAR ESTADO
+// ------------------------------------------------------
 
-    const actualizada =
-      await matriculasService.actualizarEstadoMatricula(
-        id,
-        estado.id,
-        req.user
-      );
+const actualizada =
+  await matriculasService.actualizarEstadoMatricula(
+    id,
+    estado.id,
+    req.user,
+    {
+      fecha_reserva_inicio:
+        req.body.fecha_reserva_inicio,
 
-    res.json({
+      fecha_reserva_fin:
+        req.body.fecha_reserva_fin
+    }
+);
 
-      ok: true,
+res.json({
+  ok: true,
+  message:
+    `La matrícula ahora está en estado ${estado.nombre}.`,
+  data: actualizada
+});
 
-      message:
-        `La matrícula ahora está en estado ${estado.nombre}.`,
+} catch (error) {
 
-      data:
-        actualizada
+  console.error(
+    'Error al cambiar estado de matrícula:',
+    error
+  );
 
-    });
+  // Errores de validación de reserva -> 400
+  const esValidacionReserva =
+    /reserva/i.test(error.message || '');
 
-  } catch (error) {
+  res.status(
+    esValidacionReserva ? 400 : 500
+  ).json({
+    ok: false,
+    message:
+      error.message ||
+      'Error al cambiar estado de matrícula.'
+  });
 
-    console.error(
-      'Error al cambiar estado de matrícula:',
-      error
-    );
-
-    res.status(500).json({
-
-      ok: false,
-
-      message:
-        'Error al cambiar estado de matrícula.'
-
-    });
-
-  }
+}
 
 }
 
