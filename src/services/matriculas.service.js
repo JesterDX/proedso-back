@@ -1,4 +1,3 @@
-
 const pool = require('../config/db');
 const {
   crearAsignacionPracticas
@@ -70,12 +69,107 @@ function compararArraysNumericos(a = [], b = []) {
   );
 }
 
+
+// Detecta si el estado es "reservado" (por código o nombre).
+// Si tu código es otro, ajusta la expresión regular.
+async function esEstadoReservado(client, estadoAlumnoId) {
+  const r = await client.query(
+    `SELECT codigo, nombre FROM estados_alumno WHERE id = $1 LIMIT 1`,
+    [estadoAlumnoId]
+  );
+  const e = r.rows[0];
+  if (!e) return false;
+  return /RESERV/i.test(`${e.codigo || ''} ${e.nombre || ''}`);
+}
+
+function validarFechasReserva(inicio, fin) {
+  const fi = normalizarFecha(inicio);
+  const ff = normalizarFecha(fin);
+
+  if (!fi || !ff) {
+    throw new Error(
+      'Para reservar la matrícula debes indicar la fecha de inicio y fin de la reserva.'
+    );
+  }
+  if (ff < fi) {
+    throw new Error(
+      'La fecha fin de la reserva no puede ser anterior a la fecha de inicio.'
+    );
+  }
+  return { inicio: fi, fin: ff };
+}
+
 // ==========================================================
-// LISTAR MATRÍCULAS
+// RESOLVER FECHAS DE RESERVA
+//
+// Según el estado que se va a guardar:
+//
+// - Si el estado ES "reservado":
+//     * toma data.fecha_reserva_inicio / data.fecha_reserva_fin
+//     * si no vienen en data, conserva las que ya tenía
+//       la matrícula (actual)
+//     * valida que existan ambas y que fin >= inicio
+//
+// - Si el estado NO es "reservado":
+//     * devuelve null / null (se limpia la reserva)
+//
+// Devuelve: { reservado, inicio, fin }
 // ==========================================================
-// ==========================================================
-// LISTAR MATRÍCULAS
-// ==========================================================
+
+async function resolverFechasReserva(
+  client,
+  estadoAlumnoId,
+  data = {},
+  actual = null
+) {
+
+  const reservado =
+    await esEstadoReservado(
+      client,
+      estadoAlumnoId
+    );
+
+  if (!reservado) {
+
+    return {
+      reservado: false,
+      inicio: null,
+      fin: null
+    };
+
+  }
+
+  const inicioRaw =
+    data.fecha_reserva_inicio !== undefined
+      ? data.fecha_reserva_inicio
+      : (
+          actual
+            ? actual.fecha_reserva_inicio
+            : null
+        );
+
+  const finRaw =
+    data.fecha_reserva_fin !== undefined
+      ? data.fecha_reserva_fin
+      : (
+          actual
+            ? actual.fecha_reserva_fin
+            : null
+        );
+
+  const { inicio, fin } =
+    validarFechasReserva(
+      inicioRaw,
+      finRaw
+    );
+
+  return {
+    reservado: true,
+    inicio,
+    fin
+  };
+}
+
 // ==========================================================
 // LISTAR MATRÍCULAS
 // ==========================================================
@@ -195,6 +289,19 @@ async function listarMatriculas(filtros = {}) {
       m.notas,
       m.activo,
       m.fecha_creacion,
+
+      -- =====================================================
+      -- RESERVA
+      -- =====================================================
+
+      m.fecha_reserva_inicio,
+      m.fecha_reserva_fin,
+
+      CASE
+          WHEN m.fecha_reserva_fin IS NOT NULL
+          THEN (m.fecha_reserva_fin - CURRENT_DATE)
+          ELSE NULL
+      END AS dias_restantes_reserva,
   
       -- =====================================================
       -- DATOS FINANCIEROS
@@ -301,12 +408,21 @@ async function obtenerEstadoPorCodigo(
 
 // ==========================================================
 // ACTUALIZAR ESTADO
+//
+// Si el nuevo estado es "reservado" se deben enviar:
+//
+//   datosReserva.fecha_reserva_inicio
+//   datosReserva.fecha_reserva_fin
+//
+// Si el nuevo estado NO es reservado, las fechas de reserva
+// se limpian (NULL).
 // ==========================================================
 
 async function actualizarEstadoMatricula(
   id,
   estadoAlumnoId,
-  user
+  user,
+  datosReserva = {}
 ) {
 
   const client =
@@ -316,25 +432,64 @@ async function actualizarEstadoMatricula(
 
     await client.query('BEGIN');
 
-    const result =
+    // ------------------------------------------------------
+    // MATRÍCULA ACTUAL
+    // ------------------------------------------------------
+
+    const actualResult =
       await client.query(
         `
-        UPDATE matriculas
-        SET estado_alumno_id = $1
-        WHERE id = $2
-        RETURNING *
+        SELECT *
+        FROM matriculas
+        WHERE id = $1
+        LIMIT 1
         `,
-        [
-          estadoAlumnoId,
-          id
-        ]
+        [id]
       );
 
-    if (!result.rows[0]) {
+    const actual =
+      actualResult.rows[0];
+
+    if (!actual) {
       throw new Error(
         'Matrícula no encontrada.'
       );
     }
+
+    // ------------------------------------------------------
+    // RESERVA
+    // ------------------------------------------------------
+
+    const reserva =
+      await resolverFechasReserva(
+        client,
+        estadoAlumnoId,
+        datosReserva || {},
+        actual
+      );
+
+    // ------------------------------------------------------
+    // ACTUALIZAR
+    // ------------------------------------------------------
+
+    const result =
+      await client.query(
+        `
+        UPDATE matriculas
+        SET
+          estado_alumno_id = $1,
+          fecha_reserva_inicio = $2,
+          fecha_reserva_fin = $3
+        WHERE id = $4
+        RETURNING *
+        `,
+        [
+          estadoAlumnoId,
+          reserva.inicio,
+          reserva.fin,
+          id
+        ]
+      );
 
     const estado =
       await client.query(
@@ -357,13 +512,22 @@ async function actualizarEstadoMatricula(
         )
         : `ID ${estadoAlumnoId}`;
 
+    let descripcion =
+      `Cambio de estado a ${estadoNombre}.`;
+
+    if (reserva.reservado) {
+
+      descripcion +=
+        ` Reserva desde ${reserva.inicio} hasta ${reserva.fin}.`;
+
+    }
+
     await registrarHistorial(
       client,
       {
         matricula_id: id,
         accion: 'CAMBIO_ESTADO',
-        descripcion:
-          `Cambio de estado a ${estadoNombre}.`
+        descripcion
       },
       user
     );
@@ -439,6 +603,19 @@ async function actualizarMatricula(
 
 
     // =====================================================
+    // 1.1 RESERVA (solo si el estado es "reservado")
+    // =====================================================
+
+    const reserva =
+      await resolverFechasReserva(
+        client,
+        data.estado_alumno_id,
+        data,
+        actual
+      );
+
+
+    // =====================================================
     // 2. ACTUALIZAR DATOS BÁSICOS
     // =====================================================
 
@@ -454,9 +631,11 @@ async function actualizarMatricula(
           fecha_matricula = $4,
           fecha_inicio = $5,
           fecha_fin_estimada = $6,
-          notas = $7
+          notas = $7,
+          fecha_reserva_inicio = $8,
+          fecha_reserva_fin = $9
 
-        WHERE id = $8
+        WHERE id = $10
 
         RETURNING *
         `,
@@ -481,6 +660,10 @@ async function actualizarMatricula(
           ),
 
           data.notas || null,
+
+          reserva.inicio,
+
+          reserva.fin,
 
           id
 
@@ -1438,6 +1621,16 @@ if (cambioMaquinas) {
     // 7. HISTORIAL
     // =====================================================
 
+    let descripcionHistorial =
+      'Se actualizaron los datos de la matrícula y su información financiera.';
+
+    if (reserva.reservado) {
+
+      descripcionHistorial +=
+        ` Reserva desde ${reserva.inicio} hasta ${reserva.fin}.`;
+
+    }
+
     await registrarHistorial(
       client,
       {
@@ -1449,7 +1642,7 @@ if (cambioMaquinas) {
           'ACTUALIZACION',
 
         descripcion:
-          'Se actualizaron los datos de la matrícula y su información financiera.'
+          descripcionHistorial
 
       },
       user
@@ -1516,6 +1709,19 @@ async function obtenerDetalleMatricula(id) {
       m.fecha_creacion,
       m.tipo_matricula,
       m.nombre_curso_manual,
+
+      -- ==========================================================
+      -- RESERVA
+      -- ==========================================================
+
+      m.fecha_reserva_inicio,
+      m.fecha_reserva_fin,
+
+      CASE
+        WHEN m.fecha_reserva_fin IS NOT NULL
+          THEN (m.fecha_reserva_fin - CURRENT_DATE)
+        ELSE NULL
+      END AS dias_restantes_reserva,
 
       -- ==========================================================
       -- ALUMNO
@@ -4795,7 +5001,9 @@ async function crearPlanFinanciero(
 
   return planPagoAlumno;
 
-}async function recalcularPlanFinanciero(
+}
+
+async function recalcularPlanFinanciero(
   client,
   {
     matriculaId,
@@ -6272,6 +6480,18 @@ async function crearMatricula(
     }
 
     // ======================================================
+    // RESERVA (solo si el estado es "reservado")
+    // ======================================================
+
+    const reserva =
+      await resolverFechasReserva(
+        client,
+        data.estado_alumno_id,
+        data,
+        null
+      );
+
+    // ======================================================
     // CRONOGRAMA CONFIRMADO
     // ======================================================
 
@@ -6327,7 +6547,9 @@ async function crearMatricula(
           fecha_fin_estimada,
           cronograma_url,
           notas,
-          activo
+          activo,
+          fecha_reserva_inicio,
+          fecha_reserva_fin
         )
 
         VALUES (
@@ -6339,7 +6561,9 @@ async function crearMatricula(
           $6,
           $7,
           $8,
-          TRUE
+          TRUE,
+          $9,
+          $10
         )
 
         RETURNING *
@@ -6352,7 +6576,9 @@ async function crearMatricula(
           fechaInicio,
           fechaFinEstimada,
           null,
-          data.notas || null
+          data.notas || null,
+          reserva.inicio,
+          reserva.fin
         ]
       );
 
@@ -6376,7 +6602,9 @@ async function crearMatricula(
           'CREACION',
 
         descripcion:
-          'Matrícula creada.'
+          reserva.reservado
+            ? `Matrícula creada en estado reservado. Reserva desde ${reserva.inicio} hasta ${reserva.fin}.`
+            : 'Matrícula creada.'
       },
       user
     );
@@ -6648,6 +6876,36 @@ async function procesarTodo(
       );
 
     // ======================================================
+    // 2.1 RESERVA (solo si el estado es "reservado")
+    //
+    // - Estado reservado  -> exige fecha inicio y fin.
+    //   Si no vienen en data, conserva las anteriores.
+    // - Otro estado       -> limpia las fechas de reserva.
+    // ======================================================
+
+    const reserva =
+      await resolverFechasReserva(
+        client,
+        data.estado_alumno_id,
+        data,
+        actual
+      );
+
+    const reservaInicioActual =
+      normalizarFecha(
+        actual.fecha_reserva_inicio
+      );
+
+    const reservaFinActual =
+      normalizarFecha(
+        actual.fecha_reserva_fin
+      );
+
+    const cambioReserva =
+      reservaInicioActual !== reserva.inicio ||
+      reservaFinActual !== reserva.fin;
+
+    // ======================================================
     // 3. OBTENER TODAS LAS MÁQUINAS
     //
     // NO filtramos RETIRADA.
@@ -6852,6 +7110,8 @@ async function procesarTodo(
     // IMPORTANTE:
     // Las fechas ahora también provocan
     // regeneración del cronograma.
+    //
+    // La reserva NO afecta lo financiero.
     // ======================================================
 
     const cambioFinanciero =
@@ -6875,9 +7135,11 @@ async function procesarTodo(
         fecha_matricula = $4,
         fecha_inicio = $5,
         fecha_fin_estimada = $6,
-        notas = $7
+        notas = $7,
+        fecha_reserva_inicio = $8,
+        fecha_reserva_fin = $9
 
-      WHERE id = $8
+      WHERE id = $10
       `,
       [
         data.alumno_id,
@@ -6887,6 +7149,8 @@ async function procesarTodo(
         fechaInicio,
         fechaFinEstimada,
         data.notas || null,
+        reserva.inicio,
+        reserva.fin,
         id
       ]
     );
@@ -7356,6 +7620,24 @@ async function procesarTodo(
 
       descripcion +=
         ' Se cambió la fecha fin estimada.';
+    }
+
+    // ------------------------------------------------------
+    // HISTORIAL DE RESERVA
+    // ------------------------------------------------------
+
+    if (cambioReserva) {
+
+      if (reserva.reservado) {
+
+        descripcion +=
+          ` Reserva registrada desde ${reserva.inicio} hasta ${reserva.fin}.`;
+
+      } else {
+
+        descripcion +=
+          ' Se quitó la reserva de la matrícula.';
+      }
     }
 
     // ------------------------------------------------------
@@ -9257,8 +9539,6 @@ async function eliminarMatriculaCompleta(
 }
 // ============================================================
 // CREAR MATRÍCULA ACELERADA
-// ============================================================// ============================================================
-// CREAR MATRÍCULA ACELERADA
 // ============================================================
 
 async function crearMatriculaAcelerada(data, user) {
@@ -9378,6 +9658,18 @@ async function crearMatriculaAcelerada(data, user) {
         'El estado del alumno seleccionado no existe.'
       );
     }
+
+    // ========================================================
+    // RESERVA (solo si el estado es "reservado")
+    // ========================================================
+
+    const reserva =
+      await resolverFechasReserva(
+        client,
+        data.estado_alumno_id,
+        data,
+        null
+      );
 
     // ========================================================
     // VALIDAR MÁQUINAS
@@ -9629,7 +9921,9 @@ async function crearMatriculaAcelerada(data, user) {
           notas,
           activo,
           tipo_matricula,
-          nombre_curso_manual
+          nombre_curso_manual,
+          fecha_reserva_inicio,
+          fecha_reserva_fin
         )
         VALUES (
           $1,
@@ -9642,7 +9936,9 @@ async function crearMatriculaAcelerada(data, user) {
           $6,
           TRUE,
           'ACELERADA',
-          $7
+          $7,
+          $8,
+          $9
         )
         RETURNING *
         `,
@@ -9653,7 +9949,9 @@ async function crearMatriculaAcelerada(data, user) {
           fechaInicio,
           fechaFinEstimada,
           data.notas || null,
-          data.nombre_curso_manual.trim()
+          data.nombre_curso_manual.trim(),
+          reserva.inicio,
+          reserva.fin
         ]
       );
 
@@ -9674,6 +9972,11 @@ async function crearMatriculaAcelerada(data, user) {
         accion: 'CREACION',
         descripcion:
           `Matrícula acelerada creada. Curso: ${data.nombre_curso_manual.trim()}`
+          + (
+            reserva.reservado
+              ? `. Reserva desde ${reserva.inicio} hasta ${reserva.fin}.`
+              : ''
+          )
       },
       user
     );
@@ -10029,6 +10332,5 @@ module.exports = {
   eliminarMatriculaCompleta,
 
   crearMatriculaAcelerada
-  
 
 };
